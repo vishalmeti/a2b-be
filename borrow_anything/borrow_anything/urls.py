@@ -47,6 +47,7 @@ urlpatterns = [
                 ),  # POST refresh_token -> returns new access token
                 # path('auth/token/verify/', TokenVerifyView.as_view(), name='token_verify'), # Optional: POST token -> verifies if token is valid
                 path("users/", include("apps.users.urls")),
+                path("", include("apps.communities.urls")),
             ]
         ),
     ),
