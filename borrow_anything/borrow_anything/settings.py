@@ -11,19 +11,17 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
 from pathlib import Path
+import os
+from decouple import config
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
-
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure--j!4lg&b42g08uwg+l$by^^-6312!-jk+2i$jror6-jakpgb2j'
+SECRET_KEY = config("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = config("DEBUG", default=True, cast=bool)
 
 ALLOWED_HOSTS = []
 
@@ -31,20 +29,22 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-
-     # Add Your Custom Apps Here:
-    'apps.communities.apps.CommunitiesConfig', # Tells Django to look inside apps/communities/apps.py
-    'apps.users.apps.UsersConfig',
-    'apps.items.apps.ItemsConfig',
-    'apps.transactions.apps.TransactionsConfig',
-    'apps.messaging.apps.MessagingConfig',
-    'apps.notifications.apps.NotificationsConfig',
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    # Add Your Custom Apps Here:
+    "apps.communities.apps.CommunitiesConfig",  # Tells Django to look inside apps/communities/apps.py
+    "apps.users.apps.UsersConfig",
+    "apps.items.apps.ItemsConfig",
+    "apps.transactions.apps.TransactionsConfig",
+    "apps.messaging.apps.MessagingConfig",
+    "apps.notifications.apps.NotificationsConfig",
+    # Third-party apps
+    "rest_framework",
+    "rest_framework_simplejwt",  # Add Simple JWT
 ]
 
 MIDDLEWARE = [
@@ -58,6 +58,60 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = 'borrow_anything.urls'
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        # Use JWT Authentication
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        # Keep SessionAuthentication if you want to use the Browsable API during development
+        "rest_framework.authentication.SessionAuthentication",
+    ),
+    "DEFAULT_PERMISSION_CLASSES": (
+        # Default permissions (adjust as needed)
+        "rest_framework.permissions.IsAuthenticatedOrReadOnly",
+        # Or maybe: 'rest_framework.permissions.IsAuthenticated',
+    ),
+    # Add pagination later if desired
+    # 'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    # 'PAGE_SIZE': 10
+}
+
+# borrow_anything/settings.py
+# ... (usually placed after REST_FRAMEWORK settings) ...
+
+from datetime import timedelta  # Import timedelta at the top of settings.py
+
+SIMPLE_JWT = {
+    # How long the main access token is valid for
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),  # Example: 15 minutes
+    # How long the refresh token is valid for (used to get new access tokens)
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),  # Example: 1 day
+    "ROTATE_REFRESH_TOKENS": False,  # Set to True if you want a new refresh token each time you refresh
+    "BLACKLIST_AFTER_ROTATION": False,  # Requires enabling token_blacklist app if True
+    "UPDATE_LAST_LOGIN": True,  # Updates user's last_login field on token refresh
+    "ALGORITHM": "HS256",  # Standard algorithm
+    "SIGNING_KEY": config("SECRET_KEY"),  # Uses your Django SECRET_KEY
+    "VERIFYING_KEY": "",
+    "AUDIENCE": None,
+    "ISSUER": None,
+    "JSON_ENCODER": None,
+    "JWK_URL": None,
+    "LEEWAY": 0,
+    "AUTH_HEADER_TYPES": ("Bearer",),  # Expects "Authorization: Bearer <token>"
+    "AUTH_HEADER_NAME": "HTTP_AUTHORIZATION",
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
+    "USER_AUTHENTICATION_RULE": "rest_framework_simplejwt.authentication.default_user_authentication_rule",
+    "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
+    "TOKEN_TYPE_CLAIM": "token_type",
+    "TOKEN_USER_CLASS": "rest_framework_simplejwt.models.TokenUser",
+    "JTI_CLAIM": "jti",
+    "SLIDING_TOKEN_REFRESH_EXP_CLAIM": "refresh_exp",
+    "SLIDING_TOKEN_LIFETIME": timedelta(minutes=5),
+    "SLIDING_TOKEN_REFRESH_LIFETIME": timedelta(days=1),
+    # Optional: For integrating with GraphQL if needed later
+    # "GRAPHQL_AUTHENTICATION_SCHEME": "JWT",
+}
 
 TEMPLATES = [
     {
