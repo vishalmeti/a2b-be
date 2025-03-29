@@ -7,7 +7,7 @@ app_name = 'users' # Optional namespace
 
 urlpatterns = [
     # Maps GET/PUT/PATCH requests on 'me/' to the ManageUserView
-    path('me/', views.ManageUserView.as_view(), name='me'),
-
+    path("me/", views.ManageUserView.as_view(), name="me"),
+    path("register/", views.UserCreateView.as_view(), name="register"),
     # Add other user-related URLs later (e.g., signup, password change)
 ]

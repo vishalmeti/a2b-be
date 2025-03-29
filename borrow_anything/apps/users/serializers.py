@@ -2,7 +2,7 @@
 
 from rest_framework import serializers
 from django.contrib.auth import get_user_model # Use this to get the active User model
-# Import the UserProfile model from the current app's models.py
+from django.contrib.auth.password_validation import validate_password
 from .models import UserProfile
 
 # Get the active User model (usually django.contrib.auth.models.User)
@@ -53,3 +53,58 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'updated_at',
         ]
 
+
+class UserCreateSerializer(serializers.ModelSerializer):
+    """
+    Serializer for creating new User instances. Handles password hashing
+    and automatic UserProfile creation.
+    """
+
+    # Define password field specifically for input validation and hashing
+    password = serializers.CharField(
+        write_only=True,  # Password should not be sent back in the response
+        required=True,
+        validators=[validate_password],  # Apply Django's built-in password validators
+        style={
+            "input_type": "password"
+        },  # Helps DRF Browsable API render as password input
+    )
+
+    class Meta:
+        model = User  # Target the built-in User model
+        # Fields required for user creation
+        fields = (
+            "username",
+            "password",
+            "email",
+            "first_name",
+            "last_name",
+        )
+        extra_kwargs = {
+            # Make email required for registration
+            "email": {"required": True},
+            # Optional: Make first/last names not required during signup
+            "first_name": {"required": False, "allow_blank": True},
+            "last_name": {"required": False, "allow_blank": True},
+        }
+
+    def create(self, validated_data):
+        """
+        Create and return a new `User` instance, given the validated data.
+        Also creates the associated UserProfile.
+        """
+
+        # Use create_user to handle password hashing automatically
+        user = User.objects.create_user(
+            username=validated_data["username"],
+            email=validated_data["email"],
+            password=validated_data["password"],  # create_user handles hashing
+            first_name=validated_data.get("first_name", ""),
+            last_name=validated_data.get("last_name", ""),
+        )
+
+        # Automatically create the linked UserProfile
+        # This assumes UserProfile doesn't require any extra fields during creation
+        UserProfile.objects.create(user=user)
+
+        return user
