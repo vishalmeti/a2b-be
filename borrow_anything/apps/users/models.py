@@ -3,6 +3,7 @@
 from django.db import models
 from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator
+from apps.communities.models import Community
 
 # Note: We are NOT importing Community model yet
 
@@ -20,15 +21,14 @@ class UserProfile(models.Model):
         related_name="profile",
     )
 
-    # --- Community field OMITTED for now ---
-    # community = models.ForeignKey(
-    #     'communities.Community', # Use string reference temporarily if needed, but omitting is cleaner now
-    #     on_delete=models.SET_NULL,
-    #     null=True, blank=True,
-    #     related_name='residents',
-    #     help_text="The primary community this user belongs to"
-    # )
-    # --- End of omitted field ---
+    community = models.ForeignKey(
+        Community,  # Reference the imported Community model
+        on_delete=models.SET_NULL,  # If a community is deleted, set this field to NULL
+        null=True,
+        blank=True,  # Allows profiles to exist without a community (important for existing rows & optionality)
+        related_name="residents",  # Allows community.residents.all() lookup
+        help_text="The primary community this user belongs to",
+    )
 
     phone_number = models.CharField(max_length=15, unique=True, blank=True, null=True)
     address_details = models.CharField(
@@ -58,8 +58,9 @@ class UserProfile(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        # Simpler representation without community for now
-        return f"{self.user.username}'s Profile"
+        # Update the string representation to include community name again
+        community_name = self.community.name if self.community else "No Community"
+        return f"{self.user.username} ({community_name})"
 
 
 # Optional: Signal handler can still be added here or later
