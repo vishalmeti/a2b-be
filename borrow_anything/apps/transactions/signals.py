@@ -93,13 +93,51 @@ def handle_request_status_change(
             if instance.lender_response_message:
                 message += f" Reason: {instance.lender_response_message}"
         elif current_status == BorrowingRequest.StatusChoices.COMPLETED:
-            recipient = instance.borrower_profile
-            actor = instance.lender_profile  # Lender completed
-            notification_type = (
-                Notification.NotificationTypeChoices.REQUEST_COMPLETED
-            )  # Or REVIEW_PROMPT?
-            message = f"Your borrowing of '{related_item.title}' is complete. Please leave a review for {actor.user.username}!"
-            # TODO: Could potentially create a separate REVIEW_PROMPT notification too
+            lender = instance.lender_profile
+            borrower = instance.borrower_profile
+
+            # 1. Notify Borrower
+            try:
+                Notification.objects.create(
+                    recipient=borrower,
+                    actor=lender,  # Lender performed the completion action
+                    message=f"Your borrowing of '{related_item.title}' is complete. Please leave a review for {lender.user.username}!",
+                    notification_type=Notification.NotificationTypeChoices.REQUEST_COMPLETED,  # Or REVIEW_PROMPT
+                    related_request=instance,
+                    related_item=related_item,
+                )
+                logger.info(
+                    f"Notification '{Notification.NotificationTypeChoices.REQUEST_COMPLETED}' created for BORROWER {borrower.user_id} regarding request {instance.pk}"
+                )
+                notification_created = True
+            except Exception as e_bor:
+                logger.error(
+                    f"Failed to create COMPLETION notification for borrower {borrower.user_id} on request {instance.pk}: {e_bor}"
+                )
+
+            # 2. Notify Lender
+            try:
+                Notification.objects.create(
+                    recipient=lender,
+                    actor=lender,  # Lender performed the completion action
+                    message=f"You marked the borrowing of '{related_item.title}' by {borrower.user.username} as complete. Please leave a review!",
+                    notification_type=Notification.NotificationTypeChoices.REQUEST_COMPLETED,  # Or REVIEW_PROMPT
+                    related_request=instance,
+                    related_item=related_item,
+                )
+                logger.info(
+                    f"Notification '{Notification.NotificationTypeChoices.REQUEST_COMPLETED}' created for LENDER {lender.user_id} regarding request {instance.pk}"
+                )
+                notification_created = (
+                    True  # Mark as handled even if only one succeeded
+                )
+            except Exception as e_len:
+                logger.error(
+                    f"Failed to create COMPLETION notification for lender {lender.user_id} on request {instance.pk}: {e_len}"
+                )
+
+            # Prevent further processing below for COMPLETED status
+            recipient = None  # Reset recipient as we handled creation here
 
         # Borrower Actions -> Notify Lender
         elif current_status == BorrowingRequest.StatusChoices.CANCELLED_BORROWER:
