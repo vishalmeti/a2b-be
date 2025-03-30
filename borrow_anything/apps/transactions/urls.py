@@ -45,8 +45,15 @@ urlpatterns = [
         ),
         name="request-decline",
     ),
-    # --- Add paths for other actions later ---
-    # path('requests/<int:pk>/cancel/', ...),
-    # path('requests/<int:pk>/confirm-pickup/', ...),
-    # etc.
+    # --- Add Borrower Actions URLs ---
+    path(
+        "requests/<int:pk>/cancel/",
+        views.BorrowingRequestViewSet.as_view({"patch": "cancel"}),
+        name="request-cancel",
+    ),
+    path(
+        "requests/<int:pk>/confirm-pickup/",
+        views.BorrowingRequestViewSet.as_view({"patch": "confirm_pickup"}),
+        name="request-confirm-pickup",
+    ),
 ]

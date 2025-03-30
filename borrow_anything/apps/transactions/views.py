@@ -106,6 +106,9 @@ class BorrowingRequestViewSet(
             return [permissions.IsAuthenticated(), IsBorrowerOrLender()]
         elif self.action in ["accept", "decline"]:
             return [permissions.IsAuthenticated(), IsLender()]
+        elif self.action in ["cancel", "confirm_pickup"]:
+            # Borrower can cancel or confirm pickup
+            return [permissions.IsAuthenticated(), IsBorrower()]
         # return [permissions.IsAuthenticated()]
         return super().get_permissions()
 
@@ -156,17 +159,16 @@ class BorrowingRequestViewSet(
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # get the item from the request and change its status to 'BORROWED'
+        # get the item from the request and change its status to 'BORBOOKEDROWED'
         item = instance.item
-        if item.availability_status != Item.AvailabilityStatus.BORROWED:
-            item.availability_status = Item.AvailabilityStatus.BORROWED
+        if item.availability_status != Item.AvailabilityStatus.BOOKED:
+            item.availability_status = Item.AvailabilityStatus.BOOKED
             item.save(update_fields=["availability_status", "updated_at"])
         else:
             return Response(
                 {"detail": "Item is already borrowed."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        # TODO (Signal): Trigger 'Item Borrowed' Notification for item.owner_profile
         # 2. Update status and timestamp
         instance.status = BorrowingRequest.StatusChoices.ACCEPTED
         instance.processed_at = timezone.now()
@@ -247,11 +249,94 @@ class BorrowingRequestViewSet(
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
 
-    # @action(detail=True, methods=['patch'], permission_classes=[IsBorrower], url_path='cancel')
-    # def cancel(self, request, pk=None): ...
+    @action(
+        detail=True,
+        methods=["patch"],
+        permission_classes=[IsBorrower],
+        url_path="cancel",
+    )
+    def cancel(self, request, pk=None):
+        """Borrower cancels the request (allowed if PENDING or ACCEPTED)."""
+        instance = self.get_object()  # Checks object permissions via decorator
 
-    # @action(detail=True, methods=['patch'], permission_classes=[IsBorrower], url_path='confirm-pickup')
-    # def confirm_pickup(self, request, pk=None): ...
+        # Check if cancellable
+        if instance.status not in [
+            BorrowingRequest.StatusChoices.PENDING,
+            BorrowingRequest.StatusChoices.ACCEPTED,
+        ]:
+            return Response(
+                {
+                    "detail": f"Request cannot be cancelled when status is {instance.status}."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Update status
+        instance.status = BorrowingRequest.StatusChoices.CANCELLED_BORROWER
+        instance.processed_at = timezone.now()
+
+        # Optionally update item availability status
+        item = instance.item
+        if item.availability_status in [
+            Item.AvailabilityStatus.BORROWED,
+            Item.AvailabilityStatus.BOOKED,
+        ]:
+            item.availability_status = Item.AvailabilityStatus.AVAILABLE
+            item.save(update_fields=["availability_status", "updated_at"])
+
+        # Optionally save the reason/message
+        borrower_message = request.data.get("borrower_response_message")
+        if borrower_message:
+            instance.borrower_response_message = borrower_message
+        instance.save(update_fields=["status", "updated_at"])
+
+        # TODO (Signal): Trigger 'Request Cancelled' Notification for lender
+
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+
+    @action(
+        detail=True,
+        methods=["patch"],
+        permission_classes=[IsBorrower],
+        url_path="confirm-pickup",
+    )
+    def confirm_pickup(self, request, pk=None):
+        """Borrower confirms they have picked up the item."""
+        instance = self.get_object()  # Checks object permissions
+
+        # Check if status is ACCEPTED
+        if instance.status != BorrowingRequest.StatusChoices.ACCEPTED:
+            return Response(
+                {
+                    "detail": f"Pickup can only be confirmed if request is ACCEPTED (current: {instance.status})."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Update status and timestamp
+        instance.status = BorrowingRequest.StatusChoices.PICKED_UP
+        instance.pickup_confirmed_at = timezone.now()
+        instance.save(update_fields=["status", "pickup_confirmed_at", "updated_at"])
+
+        # Update Item's availability status
+        try:
+            item = instance.item
+            item.availability_status = Item.AvailabilityStatus.BORROWED
+            item.save(update_fields=["availability_status"])
+        except Item.DoesNotExist:
+            # Should not happen if request exists, but handle defensively
+            pass  # Or log an error
+        except Exception as e:
+            # Log error during item update
+            print(
+                f"Error updating item status for request {instance.id}: {e}"
+            )  # Use proper logging
+
+        # TODO (Signal): Trigger 'Item Picked Up' Notification for lender
+
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
 
     # @action(detail=True, methods=['patch'], permission_classes=[IsBorrower], url_path='confirm-return')
     # def confirm_return(self, request, pk=None): ...

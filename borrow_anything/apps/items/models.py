@@ -54,6 +54,11 @@ class Item(models.Model):
     # Choices for availability status field
     class AvailabilityStatus(models.TextChoices):
         AVAILABLE = "AVAILABLE", "Available"
+        BOOKED = (
+            "BOOKED",
+            "Currently Booked",
+        )  # Should be managed via Transactions logic
+        # This status is set when a borrowing request is accepted
         BORROWED = (
             "BORROWED",
             "Currently Borrowed",
