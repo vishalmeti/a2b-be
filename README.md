@@ -14,6 +14,26 @@ In dense urban environments like Bengaluru, people often need everyday items tem
 
 This backend provides the API infrastructure to support the mobile application (built separately, likely in React Native).
 
+### 🔄 Borrowing Flow
+
+```ascii-animation
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│    PENDING      │ ──> │     BOOKED      │ ──> │   PICKED UP     │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+        │                                               │
+        │                                               │
+        │                                               │
+        │     ┌─────────────────┐             ┌─────────────────┐
+        └──>  │    DECLINED     │             │    RETURNED     │
+              └─────────────────┘             └─────────────────┘
+                                                        │
+                                                        v
+                                               ┌─────────────────┐
+                                               │   COMPLETED     │
+                                               └─────────────────┘
+```
+
+
 ## Core Features Implemented ✅
 
 * **User Management:** Registration, JWT Login (Access/Refresh Tokens), Profile view/update (`/me`).
@@ -189,25 +209,6 @@ Content-Type: multipart/form-data
 │ 📸 image: [file]    │
 │ 📝 caption: "Front" │
 ╰─────────────────────╯
-```
-
-### 🔄 Borrowing Flow
-
-```ascii-animation
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│    PENDING      │ ──> │     BOOKED      │ ──> │   PICKED UP     │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-        │                                               │
-        │                                               │
-        │                                               │
-        │     ┌─────────────────┐             ┌─────────────────┐
-        └──>  │    DECLINED     │             │    RETURNED     │
-              └─────────────────┘             └─────────────────┘
-                                                        │
-                                                        v
-                                               ┌─────────────────┐
-                                               │   COMPLETED     │
-                                               └─────────────────┘
 ```
 
 
