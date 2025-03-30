@@ -115,12 +115,9 @@ class ItemAdmin(admin.ModelAdmin):
     @admin.display(description="Owner")
     def owner_profile_link(self, obj):
         from django.urls import reverse
-
-        if obj.owner_profile and obj.owner_profile.user:
-            link = reverse(
-                "admin:users_userprofile_change", args=[obj.owner_profile.pk]
-            )
-            # Or link to the base User: reverse("admin:auth_user_change", args=[obj.owner_profile.user.id])
+        if obj.owner_profile:
+            # Link to auth User instead of UserProfile
+            link = reverse("admin:auth_user_change", args=[obj.owner_profile.user.id])
             return format_html(
                 '<a href="{}">{}</a>', link, obj.owner_profile.user.username
             )
