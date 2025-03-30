@@ -69,4 +69,16 @@ urlpatterns = [
     ),
     # --- Add path for reviews later ---
     # path('requests/<int:pk>/review/', ... ),
+    # Maps GET, PUT, PATCH requests to /requests/<request_pk>/review/
+    path(
+        "requests/<int:request_pk>/review/",
+        views.ReviewViewSet.as_view(
+            {  # Changed view name to ReviewViewSet
+                "get": "retrieve",  # Provided by RetrieveModelMixin
+                "put": "update",  # Provided by UpdateModelMixin
+                "patch": "partial_update",  # Provided by UpdateModelMixin
+            }
+        ),
+        name="request-review-detail",
+    ),
 ]

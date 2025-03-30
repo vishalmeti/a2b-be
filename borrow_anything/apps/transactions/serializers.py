@@ -158,43 +158,54 @@ class ReviewSerializer(serializers.ModelSerializer):
     Serializer for creating/updating/viewing Reviews.
     Permissions on who can write which fields need to be handled in the view.
     """
-    # Include read-only info about the related request for context
-    borrowing_request_id = serializers.IntegerField(source='borrowing_request.id', read_only=True)
+    # Include read-only info about the related request for context in responses
+    borrowing_request_id = serializers.IntegerField(
+        read_only=True
+    )  # Remove source='borrowing_request_id'
     item_title = serializers.CharField(source='borrowing_request.item.title', read_only=True)
     borrower_username = serializers.CharField(source='borrowing_request.borrower_profile.user.username', read_only=True)
     lender_username = serializers.CharField(source='borrowing_request.lender_profile.user.username', read_only=True)
+    request_status = serializers.CharField(
+        source="borrowing_request.status", read_only=True
+    )  # Show request status for context
 
     class Meta:
         model = Review
         fields = [
-            'id',
-            'borrowing_request_id', # Read-only context
-            'item_title',           # Read-only context
-            'borrower_username',    # Read-only context
-            'lender_username',      # Read-only context
-
-            # Fields for Borrower to submit
-            'rating_for_lender',
-            'comment_for_lender',
-            'borrower_review_submitted_at', # Read-only timestamp
-
-            # Fields for Lender to submit
-            'rating_for_borrower',
-            'comment_for_borrower',
-            'rating_for_item_condition_on_return',
-            'comment_on_item_condition',
-            'lender_review_submitted_at', # Read-only timestamp
-
-            'created_at', # Read-only
-            'updated_at', # Read-only
+            # Context fields (read-only)
+            "borrowing_request_id",
+            "item_title",
+            "borrower_username",
+            "lender_username",
+            "request_status",  # Ensure request is COMPLETED
+            # Fields for Borrower to submit/update
+            "rating_for_lender",
+            "comment_for_lender",
+            "borrower_review_submitted_at",  # Read-only timestamp
+            # Fields for Lender to submit/update
+            "rating_for_borrower",
+            "comment_for_borrower",
+            "rating_for_item_condition_on_return",
+            "comment_on_item_condition",
+            "lender_review_submitted_at",  # Read-only timestamp
+            # Record timestamps (read-only)
+            "created_at",
+            "updated_at",
         ]
         read_only_fields = [
-            'id', 'borrowing_request_id', 'item_title', 'borrower_username', 'lender_username',
-            'borrower_review_submitted_at', 'lender_review_submitted_at',
-            'created_at', 'updated_at',
+            # Context fields are always read-only via the serializer
+            "borrowing_request_id",
+            "item_title",
+            "borrower_username",
+            "lender_username",
+            "request_status",
+            # Submission timestamps are set by the view logic, not directly by user
+            "borrower_review_submitted_at",
+            "lender_review_submitted_at",
+            # Record timestamps are automatic
+            "created_at",
+            "updated_at",
         ]
-
-    # Note: Validation for who can write which fields (borrower vs lender)
-    # will be handled in the associated view logic, likely by checking request.user
-    # against borrowing_request.borrower_profile or borrowing_request.lender_profile.
-    # We might split this into BorrowerReviewSerializer and LenderReviewSerializer later.
+        # Note: All rating/comment fields are technically writable by the serializer definition.
+        # The VIEW logic MUST enforce that only the correct user (borrower/lender)
+        # can write to their respective fields.

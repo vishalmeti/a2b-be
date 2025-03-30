@@ -12,8 +12,14 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 
 # Local imports
 from .models import BorrowingRequest, Review
-from .serializers import BorrowingRequestSerializer, BorrowingRequestCreateSerializer
+from .serializers import (
+    BorrowingRequestSerializer,
+    BorrowingRequestCreateSerializer,
+    ReviewSerializer,
+)
 from apps.items.models import Item
+
+from .permissions import IsReviewParticipant
 
 
 # Permissions (Defined here for clarity, could be in permissions.py)
@@ -411,3 +417,129 @@ class BorrowingRequestViewSet(
 
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
+
+
+class ReviewViewSet(
+    mixins.RetrieveModelMixin,  # Provides .retrieve() method
+    mixins.UpdateModelMixin,  # Provides .update() & .partial_update() methods
+    viewsets.GenericViewSet,
+):  # Base class
+    """
+    API endpoint for retrieving and updating a Review associated with a Borrowing Request.
+    Uses GenericViewSet + Mixins.
+    Accessed via /requests/<request_pk>/review/ (Requires manual URL mapping)
+    """
+
+    serializer_class = ReviewSerializer
+    permission_classes = [permissions.IsAuthenticated, IsReviewParticipant]
+    # Look up the Review object using the 'borrowing_request_id' (which is the PK)
+    # based on the 'request_pk' value captured from the URL.
+    lookup_field = "borrowing_request_id"
+    lookup_url_kwarg = "request_pk"
+
+    def get_queryset(self):
+        """
+        Ensure we only retrieve reviews for COMPLETED requests
+        accessible by the current user.
+        """
+        user_profile = getattr(self.request.user, "profile", None)
+        if not user_profile:
+            return Review.objects.none()
+
+        # Base queryset: Reviews linked to completed requests involving the user
+        completed_requests_qs = BorrowingRequest.objects.filter(
+            status=BorrowingRequest.StatusChoices.COMPLETED
+        ).filter(Q(borrower_profile=user_profile) | Q(lender_profile=user_profile))
+        # Return reviews linked to those completed requests
+        return Review.objects.filter(
+            borrowing_request__in=completed_requests_qs
+        ).select_related(
+            "borrowing_request__item",
+            "borrowing_request__borrower_profile__user",
+            "borrowing_request__lender_profile__user",
+        )
+
+    # The .retrieve(), .update(), .partial_update() methods are provided by the mixins.
+    # We override perform_update to customize the save logic for PATCH/PUT.
+
+    def perform_update(self, serializer):
+        """
+        Custom logic run during update (called by UpdateModelMixin's update/partial_update).
+        Ensures only the correct user updates their respective fields
+        and sets the submission timestamp.
+        """
+        instance = serializer.instance  # The Review object being updated
+        user_profile = getattr(self.request.user, "profile", None)
+        borrowing_request = instance.borrowing_request
+
+        # Double check request is completed (should be ensured by get_queryset too)
+        if borrowing_request.status != BorrowingRequest.StatusChoices.COMPLETED:
+            # Raising error here prevents saving via serializer.save() below
+            raise ValidationError(
+                "Reviews can only be submitted for completed requests."
+            )
+
+        # Check permissions and set timestamps based on validated data in the serializer
+        now = timezone.now()
+        can_update = False
+
+        # Check if user is the borrower and is updating borrower fields
+        if borrowing_request.borrower_profile == user_profile:
+            if instance.borrower_review_submitted_at is not None:
+                raise PermissionDenied(
+                    "You have already submitted your review as the borrower."
+                )
+            if (
+                "rating_for_lender" in serializer.validated_data
+                or "comment_for_lender" in serializer.validated_data
+            ):
+                serializer.validated_data["borrower_review_submitted_at"] = (
+                    now  # Add timestamp to validated data
+                )
+                can_update = True
+            else:
+                # Prevent saving if borrower isn't updating their specific fields
+                for key in serializer.validated_data.keys():
+                    if key not in ["rating_for_lender", "comment_for_lender"]:
+                        # If trying to update other fields, deny (though serializer might handle this partly)
+                        # For clarity, we could check explicitly or rely on frontend sending only allowed fields
+                        pass  # Let serializer.save() below handle only validated fields that are part of the model
+
+        # Check if user is the lender and is updating lender fields
+        elif borrowing_request.lender_profile == user_profile:
+            if instance.lender_review_submitted_at is not None:
+                raise PermissionDenied(
+                    "You have already submitted your review as the lender."
+                )
+            lender_fields_present = any(
+                f in serializer.validated_data
+                for f in [
+                    "rating_for_borrower",
+                    "comment_for_borrower",
+                    "rating_for_item_condition_on_return",
+                    "comment_on_item_condition",
+                ]
+            )
+            if lender_fields_present:
+                serializer.validated_data["lender_review_submitted_at"] = (
+                    now  # Add timestamp to validated data
+                )
+                can_update = True
+            else:
+                pass  # Let serializer.save() below handle only validated fields
+
+        else:
+            # Should be caught by IsReviewParticipant, but defensive check
+            raise PermissionDenied("You are not a participant in this transaction.")
+
+        # Only save if the user was allowed to update at least one relevant field
+        # (This prevents saving just because unrelated data might be in validated_data)
+        # Note: This check might be overly strict depending on serializer; serializer.save() itself
+        # only saves fields present in validated_data for PATCH. Let's rely on that.
+        # if not can_update and self.request.method == 'PATCH':
+        #      # If PATCHing but no relevant fields changed for this user role
+        #      raise ValidationError("No valid fields provided for update by your role.")
+
+        # Let the mixin's default behavior save the validated fields
+        serializer.save()
+        # TODO (Signal): Trigger 'Review Submitted' Notification?

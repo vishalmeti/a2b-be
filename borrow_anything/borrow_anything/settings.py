@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 from pathlib import Path
 import os
 from decouple import config
+from urllib.parse import urlparse
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -135,16 +136,31 @@ WSGI_APPLICATION = 'borrow_anything.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql', # Use the PostgreSQL backend
-        'NAME': 'anythingborrow',         # The database name you created in Step 2
-        'USER': 'vishalmeti',       # The user name you created in Step 2
-        'PASSWORD': 'postgres', # The password you set in Step 2
-        'HOST': 'localhost',        # Or '127.0.0.1'. If your DB is on another server                    # (or Docker container), use its IP address or hostname.
-        'PORT': '5432',           # Default PostgreSQL port (usually empty string or '5432')
+# Database settings for PostgreSQL
+isProd = config("IS_PROD", default=False, cast=bool)  # Check if in production
+Postgres = urlparse(config("PROD_DB_URL", default=""))  # Get the database URL
+if isProd:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": Postgres.path.replace("/", ""),
+            "USER": Postgres.username,
+            "PASSWORD": Postgres.password,
+            "HOST": Postgres.hostname,
+            "PORT": 5432,
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",  # Use the PostgreSQL backend
+            "NAME": "anythingborrow",  # The database name you created in Step 2
+            "USER": "vishalmeti",  # The user name you created in Step 2
+            "PASSWORD": "postgres",  # The password you set in Step 2
+            "HOST": "localhost",  # Or '127.0.0.1'. If your DB is on another server                    # (or Docker container), use its IP address or hostname.
+            "PORT": "5432",  # Default PostgreSQL port (usually empty string or '5432')
+        }
+    }
 
 AWS_ACCESS_KEY_ID = config("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = config("AWS_SECRET_ACCESS_KEY")

@@ -130,13 +130,13 @@ class Review(models.Model):
     Stores ratings and comments left by users after a borrowing transaction is completed.
     Should ideally be created when a BorrowingRequest status becomes COMPLETED.
     """
-
-    # Link securely to the completed transaction
+    # Link securely to the completed transaction using OneToOneField
     borrowing_request = models.OneToOneField(
         BorrowingRequest,
         on_delete=models.CASCADE,  # If the request is deleted, delete the review
         related_name="review",  # Access review via request.review
         help_text="The completed borrowing request being reviewed",
+        primary_key=True,  # Make the request ID the primary key for Review too
     )
 
     # --- Feedback from Borrower (about Lender) ---
@@ -150,7 +150,9 @@ class Review(models.Model):
         blank=True,
         help_text="Borrower's comments about their interaction with the lender",
     )
-    borrower_review_submitted_at = models.DateTimeField(null=True, blank=True)
+    borrower_review_submitted_at = models.DateTimeField(
+        null=True, blank=True, help_text="Timestamp when borrower submitted their part"
+    )
 
     # --- Feedback from Lender (about Borrower & Item Condition) ---
     rating_for_borrower = models.PositiveSmallIntegerField(
@@ -174,15 +176,20 @@ class Review(models.Model):
         blank=True,
         help_text="Lender's comments about the item's condition when returned",
     )
-    lender_review_submitted_at = models.DateTimeField(null=True, blank=True)
+    lender_review_submitted_at = models.DateTimeField(
+        null=True, blank=True, help_text="Timestamp when lender submitted their part"
+    )
 
-    # Timestamps for the review itself
+    # Timestamps for the review record itself
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"Review for Request ID: {self.borrowing_request.id} (Item: {self.borrowing_request.item.title})"
+        # Check if borrowing_request exists before accessing related fields
+        if hasattr(self, "borrowing_request") and self.borrowing_request:
+            return f"Review for Request ID: {self.borrowing_request_id} (Item: {self.borrowing_request.item.title})"
+        return f"Review (request missing/deleted)"  # Fallback
 
     class Meta:
         ordering = ["-created_at"]
-        # Ensure only one review record per borrowing request (handled by OneToOneField)
+        # Note: The OneToOneField on borrowing_request ensures uniqueness per request.
