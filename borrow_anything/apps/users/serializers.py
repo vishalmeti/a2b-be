@@ -4,6 +4,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model # Use this to get the active User model
 from django.contrib.auth.password_validation import validate_password
 from .models import UserProfile
+from apps.communities.models import Community
 
 # Get the active User model (usually django.contrib.auth.models.User)
 User = get_user_model()
@@ -26,31 +27,43 @@ class UserProfileSerializer(serializers.ModelSerializer):
     # Nest the read-only User details within the profile data
     user = UserSerializer(read_only=True)
 
-    # --- Community fields OMITTED for now ---
-    # Will be added later once the ForeignKey is added to the UserProfile model
-    # community_id = serializers.PrimaryKeyRelatedField(...)
-    # community_name = serializers.CharField(...)
-    # --- End of omitted fields ---
+    community = serializers.PrimaryKeyRelatedField(
+        queryset=Community.objects.filter(
+            is_approved=True, is_active=True
+        ),  # Only allow setting to valid communities
+        allow_null=True,  # Allow unsetting community if needed
+        required=False,  # Not required for every profile update (e.g., updating phone only)
+    )
+    # Keep community_name read-only if you want to display it alongside the ID in GET responses
+    community_name = serializers.CharField(
+        source="community.name", read_only=True, allow_null=True
+    )
 
     class Meta:
         model = UserProfile
         # List the fields from UserProfile model you want to expose/update via the /me endpoint
         fields = [
-            'user', # The nested User object from UserSerializer above
-            'phone_number',
-            'address_details',
-            'is_community_member_verified', # Read-only, likely set by admin/system
-            'average_lender_rating', # Read-only, calculated field
-            'average_borrower_rating', # Read-only, calculated field
-            'updated_at', # Read-only
+            "user",  # The nested User object from UserSerializer above
+            "phone_number",
+            "profile_picture_s3_key",  # Use the key field name
+            # Include the 'community' field (writable ID)
+            "community",
+            # Read-only name for convenience in GET responses
+            "community_name",
+            "address_details",
+            "is_community_member_verified",  # Read-only, likely set by admin/system
+            "average_lender_rating",  # Read-only, calculated field
+            "average_borrower_rating",  # Read-only, calculated field
+            "updated_at",  # Read-only
         ]
         # Specify fields that should *not* be updatable via a PUT/PATCH to /me/
         read_only_fields = [
-            'user',
-            'is_community_member_verified',
-            'average_lender_rating',
-            'average_borrower_rating',
-            'updated_at',
+            "user",
+            "community_name",
+            "is_community_member_verified",
+            "average_lender_rating",
+            "average_borrower_rating",
+            "updated_at",
         ]
 
 

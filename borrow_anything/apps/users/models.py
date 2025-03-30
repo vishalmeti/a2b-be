@@ -36,6 +36,12 @@ class UserProfile(models.Model):
         blank=True,
         help_text="Optional: e.g., Flat No, Block - use minimally for privacy",
     )
+    profile_picture_s3_key = models.CharField(
+        max_length=1024,
+        blank=True,
+        null=True,  # Allow profile picture to be optional
+        help_text="S3 object key for the profile picture",
+    )
 
     is_community_member_verified = models.BooleanField(
         default=False,
