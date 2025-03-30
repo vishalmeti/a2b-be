@@ -104,9 +104,9 @@ class BorrowingRequestViewSet(
         print(f"Getting permissions for action: {self.action}")
         if self.action == "retrieve":
             return [permissions.IsAuthenticated(), IsBorrowerOrLender()]
-        elif self.action in ["accept", "decline"]:
+        elif self.action in ["accept", "decline", "complete"]:
             return [permissions.IsAuthenticated(), IsLender()]
-        elif self.action in ["cancel", "confirm_pickup"]:
+        elif self.action in ["cancel", "confirm_pickup", "confirm_return"]:
             # Borrower can cancel or confirm pickup
             return [permissions.IsAuthenticated(), IsBorrower()]
         # return [permissions.IsAuthenticated()]
@@ -338,10 +338,76 @@ class BorrowingRequestViewSet(
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
 
-    # @action(detail=True, methods=['patch'], permission_classes=[IsBorrower], url_path='confirm-return')
-    # def confirm_return(self, request, pk=None): ...
+    # --- *** Add Return/Complete Actions *** ---
 
-    # @action(detail=True, methods=['patch'], permission_classes=[IsLender], url_path='complete')
-    # def complete(self, request, pk=None): ...
+    @action(
+        detail=True,
+        methods=["patch"],
+        permission_classes=[IsBorrower],
+        url_path="confirm-return",
+    )
+    def confirm_return(self, request, pk=None):
+        """Borrower confirms they have returned the item (pending lender confirmation)."""
+        instance = self.get_object()  # Checks permissions
 
-    # --- View for Reviews needed later ---
+        # Check if status allows this action
+        if instance.status != BorrowingRequest.StatusChoices.PICKED_UP:
+            return Response(
+                {
+                    "detail": f"Return can only be confirmed if status is PICKED_UP (current: {instance.status})."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Update status and timestamp
+        instance.status = BorrowingRequest.StatusChoices.RETURNED
+        instance.return_initiated_at = timezone.now()
+        instance.save(update_fields=["status", "return_initiated_at", "updated_at"])
+
+        # TODO (Signal): Trigger 'Item Returned' Notification for lender
+
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+
+    @action(
+        detail=True,
+        methods=["patch"],
+        permission_classes=[IsLender],
+        url_path="complete",
+    )
+    def complete(self, request, pk=None):
+        """Lender confirms item returned okay, completing the transaction."""
+        instance = self.get_object()  # Checks permissions
+
+        # Check if status allows this action
+        if instance.status != BorrowingRequest.StatusChoices.RETURNED:
+            return Response(
+                {
+                    "detail": f"Request can only be completed if status is RETURNED (current: {instance.status})."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Update status and timestamp
+        instance.status = BorrowingRequest.StatusChoices.COMPLETED
+        instance.completed_at = timezone.now()
+        instance.save(update_fields=["status", "completed_at", "updated_at"])
+
+        # Update Item's availability status back to AVAILABLE
+        # Basic approach: Set it available. More complex: check future bookings?
+        try:
+            item = instance.item
+            # TODO: Add logic here later if needed to check for other *accepted* future requests
+            # before setting back to available. For now, assume it becomes available.
+            item.availability_status = Item.AvailabilityStatus.AVAILABLE
+            item.save(update_fields=["availability_status"])
+        except Exception as e:
+            print(
+                f"Error updating item status to available for request {instance.id}: {e}"
+            )  # Use logging
+
+        # TODO (Signal): Trigger 'Transaction Completed' Notification for borrower
+        # TODO (Signal): Trigger creation of Review object: Review.objects.get_or_create(borrowing_request=instance)
+
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)

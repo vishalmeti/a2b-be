@@ -56,4 +56,17 @@ urlpatterns = [
         views.BorrowingRequestViewSet.as_view({"patch": "confirm_pickup"}),
         name="request-confirm-pickup",
     ),
+    # --- Add Return/Complete Action URLs ---
+    path(
+        "requests/<int:pk>/confirm-return/",
+        views.BorrowingRequestViewSet.as_view({"patch": "confirm_return"}),
+        name="request-confirm-return",
+    ),
+    path(
+        "requests/<int:pk>/complete/",
+        views.BorrowingRequestViewSet.as_view({"patch": "complete"}),
+        name="request-complete",
+    ),
+    # --- Add path for reviews later ---
+    # path('requests/<int:pk>/review/', ... ),
 ]
