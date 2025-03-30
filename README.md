@@ -14,6 +14,155 @@ In dense urban environments like Bengaluru, people often need everyday items tem
 
 This backend provides the API infrastructure to support the mobile application (built separately, likely in React Native).
 
+## Database Schema (ER Diagram) 📈
+
+```mermaid
+erDiagram
+    %% Borrow Anything - Hyperlocal Sharing App Schema (Revised)
+
+    %% --- Core User & Community ---
+    USER {
+        int id PK
+        string username UK
+        string email UK
+        string password_hash
+        string first_name "(nullable)"
+        string last_name "(nullable)"
+        bool is_active
+        bool is_staff
+        datetime date_joined
+        datetime last_login "(nullable)"
+    }
+    USER_PROFILE {
+        int user_id PK, FK
+        int community_id FK "(nullable)"
+        string phone_number "(nullable, UK)"
+        string profile_picture_s3_key "(nullable)"
+        string address_details "(nullable)"
+        bool is_community_member_verified
+        float average_lender_rating "(nullable)"
+        float average_borrower_rating "(nullable)"
+        datetime created_at
+        datetime updated_at
+    }
+    COMMUNITY {
+        int id PK
+        string name
+        string city
+        string pincode
+        decimal latitude "(nullable)"
+        decimal longitude "(nullable)"
+        bool is_approved
+        bool is_active
+        bool is_officially_verified
+        datetime created_at
+        datetime updated_at
+    }
+    COMMUNITY_SUGGESTION {
+        int id PK
+        string suggested_name
+        string city
+        string pincode
+        int suggested_by_id FK "(nullable)"
+        string status "Choices"
+        int created_community_id FK "(nullable)"
+        string admin_notes "(nullable)"
+        datetime created_at
+        datetime reviewed_at "(nullable)"
+    }
+
+    USER ||--|| USER_PROFILE : "has profile"
+    COMMUNITY }o--|| USER_PROFILE : "belongs to"
+    USER }o--|| COMMUNITY_SUGGESTION : "suggested by"
+    COMMUNITY }o--|| COMMUNITY_SUGGESTION : "created from"
+
+    %% --- Items ---
+    CATEGORY {
+        int id PK
+        string name UK
+        string description "(nullable)"
+        string icon "(nullable)"
+        bool is_active
+        datetime created_at
+        datetime updated_at
+    }
+    ITEM {
+        int id PK
+        int owner_profile_id FK
+        int community_id FK
+        int category_id FK
+        string title
+        string description
+        string condition "Choices"
+        string availability_status "Choices"
+        decimal deposit_amount
+        decimal borrowing_fee
+        bool is_active
+        float average_item_rating "(nullable)"
+        datetime created_at
+        datetime updated_at
+    }
+    ITEM_IMAGE {
+        int id PK
+        int item_id FK
+        string s3_key "S3 Object Key"
+        string caption "(nullable)"
+        datetime uploaded_at
+    }
+
+    USER_PROFILE ||--o{ ITEM : "owns"
+    COMMUNITY ||--o{ ITEM : "located in"
+    CATEGORY ||--o{ ITEM : "categorizes"
+    ITEM ||--o{ ITEM_IMAGE : "has image refs"
+
+    %% --- Transactions ---
+    BORROWING_REQUEST {
+        int id PK
+        int item_id FK
+        int borrower_profile_id FK
+        int lender_profile_id FK
+        date start_date
+        date end_date
+        string status "Choices"
+        string borrower_message "(nullable)"
+        string lender_response_message "(nullable)"
+        datetime created_at
+        datetime updated_at
+        datetime processed_at "(nullable)"
+        datetime pickup_confirmed_at "(nullable)"
+        datetime return_initiated_at "(nullable)"
+        datetime completed_at "(nullable)"
+    }
+    REVIEW {
+        int borrowing_request_id PK, FK
+        int rating_for_lender "(1-5, nullable)"
+        string comment_for_lender "(nullable)"
+        datetime borrower_review_submitted_at "(nullable)"
+        int rating_for_borrower "(1-5, nullable)"
+        string comment_for_borrower "(nullable)"
+        int rating_for_item_condition_on_return "(1-5, nullable)"
+        string comment_on_item_condition "(nullable)"
+        datetime lender_review_submitted_at "(nullable)"
+        datetime created_at
+        datetime updated_at
+    }
+
+    ITEM ||--o{ BORROWING_REQUEST : "is requested in"
+    USER_PROFILE ||--o{ BORROWING_REQUEST : "requested by (borrower)"
+    USER_PROFILE ||--o{ BORROWING_REQUEST : "lent via (lender)"
+    BORROWING_REQUEST ||--|| REVIEW : "reviewed via"
+
+    %% --- Planned Models (Relationships Only) ---
+    %% BORROWING_REQUEST }o--o{ CHAT_MESSAGE : "has messages"
+    %% USER_PROFILE }o--o{ CHAT_MESSAGE : "sent message"
+    %% USER_PROFILE ||--o{ NOTIFICATION : "receives notification"
+    %% BORROWING_REQUEST }o--|| NOTIFICATION : "about request (optional)"
+    %% ITEM }o--|| NOTIFICATION : "about item (optional)"
+    %% USER_PROFILE }o--|| NOTIFICATION : "about user (optional)"
+
+```
+
+
 ### 🔄 Borrowing Flow
 
 ```ascii-animation
