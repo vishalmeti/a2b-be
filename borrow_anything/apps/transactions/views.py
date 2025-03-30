@@ -1,25 +1,19 @@
 # apps/transactions/views.py
 
+# Django imports
+from django.db.models import Q
+from django.utils import timezone
+
+# Django REST Framework imports
 from rest_framework import viewsets, permissions, mixins, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied, ValidationError
-from django.db.models import Q  # For OR queries
-from django.utils import timezone  # For setting timestamps
 
-# Import local models and serializers
+# Local imports
 from .models import BorrowingRequest, Review
-from .serializers import (
-    BorrowingRequestSerializer,
-    BorrowingRequestCreateSerializer,
-    # ReviewSerializer # Import later when needed
-)
-
-# Import models from other apps if needed for checks
+from .serializers import BorrowingRequestSerializer, BorrowingRequestCreateSerializer
 from apps.items.models import Item
-
-# Import UserProfile if needed for type hinting or direct access (though request.user.profile is used)
-# from apps.users.models import UserProfile
 
 
 # Permissions (Defined here for clarity, could be in permissions.py)
@@ -38,8 +32,14 @@ class IsBorrowerOrLender(permissions.BasePermission):
 class IsLender(permissions.BasePermission):
     """Allows access only if user is the lender"""
 
+    def has_permission(self, request, view):
+        print("IsLender: Checking class-level permission")
+        return bool(request.user and request.user.is_authenticated)
+
     def has_object_permission(self, request, view, obj):
+        print("IsLender: Checking object-level permission")
         user_profile = getattr(request.user, "profile", None)
+        print(f"User Profile: {user_profile}, Lender Profile: {obj.lender_profile}")
         return user_profile and obj.lender_profile == user_profile
 
 
@@ -77,7 +77,6 @@ class BorrowingRequestViewSet(
         user_profile = getattr(self.request.user, "profile", None)
         if not user_profile:
             return BorrowingRequest.objects.none()
-
         return (
             BorrowingRequest.objects.filter(
                 Q(borrower_profile=user_profile) | Q(lender_profile=user_profile)
@@ -101,11 +100,13 @@ class BorrowingRequestViewSet(
         return BorrowingRequestSerializer
 
     def get_permissions(self):
-        """Apply stricter permissions for retrieving a specific request detail."""
+        """Apply appropriate permissions based on the action."""
+        print(f"Getting permissions for action: {self.action}")
         if self.action == "retrieve":
-            # Must be Authenticated AND either the Borrower or Lender
             return [permissions.IsAuthenticated(), IsBorrowerOrLender()]
-        # Default permissions (IsAuthenticated) apply to 'list' and 'create'
+        elif self.action in ["accept", "decline"]:
+            return [permissions.IsAuthenticated(), IsLender()]
+        # return [permissions.IsAuthenticated()]
         return super().get_permissions()
 
     def perform_create(self, serializer):
@@ -136,11 +137,115 @@ class BorrowingRequestViewSet(
     # These will be implemented next using @action decorator.
     # The manual URL mapping will need corresponding entries for these actions.
 
-    # @action(detail=True, methods=['patch'], permission_classes=[IsLender], url_path='accept')
-    # def accept(self, request, pk=None): ...
+    @action(
+        detail=True,
+        methods=["patch"],
+        permission_classes=[IsLender],
+        url_path="accept",
+    )
+    def accept(self, request, pk=None):
+        """Lender accepts the borrowing request."""
+        instance = (
+            self.get_object()
+        )  # Gets BorrowingRequest by pk, checks base permissions
 
-    # @action(detail=True, methods=['patch'], permission_classes=[IsLender], url_path='decline')
-    # def decline(self, request, pk=None): ...
+        # 1. Check current status
+        if instance.status != BorrowingRequest.StatusChoices.PENDING:
+            return Response(
+                {"detail": "Request is not pending approval."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # get the item from the request and change its status to 'BORROWED'
+        item = instance.item
+        if item.availability_status != Item.AvailabilityStatus.BORROWED:
+            item.availability_status = Item.AvailabilityStatus.BORROWED
+            item.save(update_fields=["availability_status", "updated_at"])
+        else:
+            return Response(
+                {"detail": "Item is already borrowed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # TODO (Signal): Trigger 'Item Borrowed' Notification for item.owner_profile
+        # 2. Update status and timestamp
+        instance.status = BorrowingRequest.StatusChoices.ACCEPTED
+        instance.processed_at = timezone.now()
+        # Optionally save a message if provided
+        lender_message = request.data.get("lender_response_message")
+        if lender_message:
+            instance.lender_response_message = lender_message
+        instance.save()
+
+        # 3. *** Auto-Decline Conflicting PENDING Requests ***
+        conflicting_requests = BorrowingRequest.objects.filter(
+            item=instance.item,  # Same item
+            status=BorrowingRequest.StatusChoices.PENDING,  # Only pending ones
+            start_date__lte=instance.end_date,  # Their start <= accepted end
+            end_date__gte=instance.start_date,  # Their end >= accepted start
+        ).exclude(
+            pk=instance.pk
+        )  # Exclude the one just accepted
+
+        declined_count = 0
+        for req in conflicting_requests:
+            req.status = BorrowingRequest.StatusChoices.DECLINED
+            req.processed_at = timezone.now()
+            req.lender_response_message = (
+                "Item automatically declined as it was booked for conflicting dates."
+            )
+            req.save(
+                update_fields=[
+                    "status",
+                    "processed_at",
+                    "lender_response_message",
+                    "updated_at",
+                ]
+            )
+            declined_count += 1
+            # TODO (Signal): Trigger 'Request Declined' Notification for req.borrower_profile
+
+        if declined_count > 0:
+            print(
+                f"Auto-declined {declined_count} conflicting requests for item {instance.item.id}"
+            )  # Replace with logging
+
+        # TODO (Signal): Trigger 'Request Accepted' Notification for instance.borrower_profile
+
+        # 4. Return updated data
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+
+    @action(
+        detail=True,
+        methods=["patch"],
+        permission_classes=[IsLender],
+        url_path="decline",
+    )
+    def decline(self, request, pk=None):
+        """Lender declines the borrowing request."""
+        instance = self.get_object()
+
+        # 1. Check current status
+        if instance.status != BorrowingRequest.StatusChoices.PENDING:
+            return Response(
+                {"detail": "Request is not pending approval."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # 2. Update status and timestamp
+        instance.status = BorrowingRequest.StatusChoices.DECLINED
+        instance.processed_at = timezone.now()
+        # Optionally save the reason/message
+        lender_message = request.data.get("lender_response_message")
+        if lender_message:
+            instance.lender_response_message = lender_message
+        instance.save()
+
+        # TODO (Signal): Trigger 'Request Declined' Notification for instance.borrower_profile
+
+        # 3. Return updated data
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
 
     # @action(detail=True, methods=['patch'], permission_classes=[IsBorrower], url_path='cancel')
     # def cancel(self, request, pk=None): ...
