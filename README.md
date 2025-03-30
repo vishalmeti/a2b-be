@@ -69,3 +69,193 @@ This backend provides the API infrastructure to support the mobile application (
 
 ```bash
 python manage.py runserver
+```
+
+## API Documentation 📡
+
+```terminal
+$ curl http://127.0.0.1:8000/api/v1
+╭──────────────────────────────────────╮
+│ Borrow Anything API v1               │
+│ Status: 🟢 Online                    │
+│ Base URL: http://127.0.0.1:8000/api/v1 │
+╰──────────────────────────────────────╯
+```
+
+### 🔐 Authentication API
+
+```js
+// LOGIN
+➜ POST /auth/token
+{
+  "username": "demo_user",
+  "password": "secure123"
+}
+
+✓ Response 200
+{
+  "refresh": "eyJhbG...", // Valid for 7 days
+  "access": "eyJ0eX..."  // Valid for 24 hours
+}
+
+// REFRESH TOKEN
+➜ POST /auth/token/refresh
+Authorization: Bearer eyJhbG...
+{
+  "refresh": "eyJhbG..."
+}
+
+✓ Response 200
+{
+  "access": "newToken..."
+}
+```
+
+### 👤 User Operations
+
+```js
+// REGISTER
+➜ POST /users/register
+{
+  "username": "john_doe",
+  "email": "john@example.com",
+  "password": "secure123",
+  "first_name": "John",
+  "last_name": "Doe"
+}
+
+// PROFILE
+➜ GET /users/me
+Authorization: Bearer eyJ0eX...
+
+✓ Response 200
+{
+  "id": 1,
+  "username": "john_doe",
+  "community": {
+    "id": 1,
+    "name": "Green Valley"
+  },
+  "items_count": 5,
+  "active_requests": 2
+}
+```
+
+### 🏘️ Community System
+
+```js
+// LIST COMMUNITIES
+➜ GET /communities?pincode=560001
+Authorization: Bearer eyJ0eX...
+
+✓ Response 200
+[
+  {
+    "id": 1,
+    "name": "Green Valley",
+    "members": 42,
+    "items_available": 156
+  }
+  // ...more communities
+]
+
+// SUGGEST NEW
+➜ POST /suggestions
+{
+  "name": "Palm Heights",
+  "pincode": "560001",
+  "description": "Apartment complex with 200 units"
+}
+```
+
+### 📦 Item Management
+
+```js
+// CREATE ITEM
+➜ POST /items
+Authorization: Bearer eyJ0eX...
+{
+  "title": "Mountain Bike",
+  "category": 1,
+  "condition": "EXCELLENT",
+  "description": "26\" Trek mountain bike",
+  "available_from": "2025-04-01"
+}
+
+// UPLOAD IMAGES
+➜ POST /items/1/images
+Content-Type: multipart/form-data
+╭─────────────────────╮
+│ 📸 image: [file]    │
+│ 📝 caption: "Front" │
+╰─────────────────────╯
+```
+
+### 🔄 Borrowing Flow
+
+```ascii-animation
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│    PENDING      │ ──> │     BOOKED      │ ──> │   PICKED UP     │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+        │                                               │
+        │                                               │
+        │                                               │
+        │     ┌─────────────────┐             ┌─────────────────┐
+        └──>  │    DECLINED     │             │    RETURNED     │
+              └─────────────────┘             └─────────────────┘
+                                                        │
+                                                        v
+                                               ┌─────────────────┐
+                                               │   COMPLETED     │
+                                               └─────────────────┘
+```
+
+
+
+```js
+// CREATE REQUEST
+➜ POST /requests
+{
+  "item_id": 1,
+  "dates": ["2025-04-01", "2025-04-03"],
+  "message": "Need for weekend trip"
+}
+
+// LENDER ACTIONS
+➜ PATCH /requests/1/accept    // Changes status to BOOKED
+➜ PATCH /requests/1/decline   // Changes status to DECLINED
+➜ PATCH /requests/1/complete  // Changes status to COMPLETED
+
+// BORROWER ACTIONS
+➜ PATCH /requests/1/confirm-pickup  // Changes status to PICKED_UP
+➜ PATCH /requests/1/confirm-return  // Changes status to RETURNED
+
+// Status Flow
+Request: PENDING → BOOKED → PICKED_UP → RETURNED → COMPLETED
+                → DECLINED
+                → CANCELLED_BORROWER
+```
+
+### 📊 Response Codes
+
+```terminal
+HTTP/1.1 200 ✓ Success
+HTTP/1.1 201 ✓ Created
+HTTP/1.1 400 ⚠ Bad Request
+HTTP/1.1 401 ⚠ Unauthorized
+HTTP/1.1 403 ⚠ Forbidden
+HTTP/1.1 404 ⚠ Not Found
+HTTP/1.1 500 ⚠ Server Error
+```
+
+### 🔧 Testing API
+
+```bash
+# Quick test with HTTPie
+$ http POST api/v1/auth/token \
+    username=demo password=demo123
+
+# Health check
+$ curl -I http://127.0.0.1:8000/api/v1/health
+HTTP/1.1 200 OK ✓
+```
