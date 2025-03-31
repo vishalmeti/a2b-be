@@ -50,6 +50,7 @@ urlpatterns = [
                 path("", include("apps.communities.urls")),
                 path("", include("apps.items.urls")),
                 path("", include("apps.transactions.urls")),
+                path("", include("apps.notifications.urls")),
             ]
         ),
     ),
