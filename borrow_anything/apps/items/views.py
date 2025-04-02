@@ -76,6 +76,11 @@ class ItemViewSet(
             .select_related("owner_profile__user", "category", "community")
             .prefetch_related("images")
         )
+
+        user_id = self.request.query_params.get("user_id", None)
+        if user_id:
+            queryset = queryset.filter(owner_profile__user_id=user_id)
+
         return queryset
 
     def get_serializer_class(self):
