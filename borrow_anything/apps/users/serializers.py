@@ -5,9 +5,13 @@ from django.contrib.auth import get_user_model # Use this to get the active User
 from django.contrib.auth.password_validation import validate_password
 from .models import UserProfile
 from apps.communities.models import Community
+from .utils import S3ImageUploader
+
+# Import the S3ImageUploader class for handling image uploads
 
 # Get the active User model (usually django.contrib.auth.models.User)
 User = get_user_model()
+S3Helper = S3ImageUploader()  # Initialize the S3ImageUploader for image handling
 
 class UserSerializer(serializers.ModelSerializer):
     """ Serializer for the base Django User model (read-only fields for profile view) """
@@ -39,6 +43,17 @@ class UserProfileSerializer(serializers.ModelSerializer):
         source="community.name", read_only=True, allow_null=True
     )
 
+    profile_picture_url = serializers.SerializerMethodField()
+
+    def get_profile_picture_url(self, obj):
+        """
+        Generate a presigned URL for the profile picture stored in S3.
+        This is read-only and should not be updated via the API.
+        """
+        if obj.profile_picture_s3_key:
+            return S3Helper.get_image_presigned_url(obj.profile_picture_s3_key)
+        return None
+
     class Meta:
         model = UserProfile
         # List the fields from UserProfile model you want to expose/update via the /me endpoint
@@ -55,6 +70,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "average_lender_rating",  # Read-only, calculated field
             "average_borrower_rating",  # Read-only, calculated field
             "updated_at",  # Read-only
+            "profile_picture_url",  # Presigned URL for the profile picture
         ]
         # Specify fields that should *not* be updatable via a PUT/PATCH to /me/
         read_only_fields = [

@@ -30,7 +30,9 @@ ALLOWED_HOSTS = ["*"]  # Add your production domain here
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",  # Vite local development server
     "http://127.0.0.1:3000",  # Also include 127.0.0.1 variant
-    "http://192.168.1.41:3000",  # Vite network address (replace if your IP changes)
+    "http://192.168.1.41:3000",
+    "https://shardit.vercel.app",
+    # Vite network address (replace if your IP changes)
     # Add any other origins you need (e.g., your deployed frontend URL later)
 ]
 
