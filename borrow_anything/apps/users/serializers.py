@@ -39,9 +39,9 @@ class UserProfileSerializer(serializers.ModelSerializer):
         required=False,  # Not required for every profile update (e.g., updating phone only)
     )
     # Keep community_name read-only if you want to display it alongside the ID in GET responses
-    community_name = serializers.CharField(
-        source="community.name", read_only=True, allow_null=True
-    )
+    community_name = serializers.CharField(read_only=True, allow_null=True)
+    first_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
+    last_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
 
     profile_picture_url = serializers.SerializerMethodField()
 
@@ -60,6 +60,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
         fields = [
             "user",  # The nested User object from UserSerializer above
             "phone_number",
+            "first_name",  # Use the source to map to the User model's field
+            "last_name",  # Use the source to map to the User model's field
             "profile_picture_s3_key",  # Use the key field name
             # Include the 'community' field (writable ID)
             "community",
@@ -81,6 +83,48 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "average_borrower_rating",
             "updated_at",
         ]
+
+    def update(self, instance: UserProfile, validated_data):
+        """
+        Handle updates for both UserProfile and related User fields.
+        """
+        # Get the related User instance
+        user = instance.user
+        user_updated = False  # Flag to track if user object needs saving
+
+        # Update User fields if they are present in the validated data
+        if "first_name" in validated_data:
+            user.first_name = validated_data.pop(
+                "first_name"
+            )  # Use pop to remove from dict
+            user_updated = True
+        if "last_name" in validated_data:
+            user.last_name = validated_data.pop("last_name")
+            user_updated = True
+            # No need to set user_updated for UserProfile fields
+        # Add email handling here if you allow it, including uniqueness checks if necessary
+        # if 'email' in validated_data:
+        #     user.email = validated_data.pop('email')
+        #     user_updated = True
+
+        # Save the User object *only* if it was changed
+        if user_updated:
+            user.save(
+                update_fields=["first_name", "last_name"]
+            )  # Specify fields for efficiency
+            # user.save(update_fields=['first_name', 'last_name', 'email']) # If email included
+
+        # Update UserProfile fields - remaining items in validated_data
+        # Let the default ModelSerializer update handle the direct fields on UserProfile
+        # It iterates through remaining validated_data and sets attributes on 'instance'
+        instance = super().update(instance, validated_data)
+
+        # instance.phone_number = validated_data.get('phone_number', instance.phone_number)
+        # instance.address_details = validated_data.get('address_details', instance.address_details)
+        # instance.community = validated_data.get('community', instance.community)
+        # instance.save() # super().update() already saves the instance
+
+        return instance
 
 
 class UserCreateSerializer(serializers.ModelSerializer):
