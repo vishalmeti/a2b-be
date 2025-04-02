@@ -1,6 +1,8 @@
 # apps/items/serializers.py
 
 from rest_framework import serializers
+
+from apps.users.serializers import UserProfileSerializer
 from .models import Category, Item, ItemImage
 from apps.users.models import UserProfile # Needed for owner info later if required
 from .utils import generate_s3_presigned_url
@@ -46,13 +48,15 @@ class ItemSerializer(serializers.ModelSerializer):
         queryset=Category.objects.filter(is_active=True),
         source='category', write_only=True, allow_null=False # Category is mandatory
     )
-    # Read-only owner username
-    owner_username = serializers.CharField(source='owner_profile.user.username', read_only=True)
+    # Read-only owner user
+    owner = serializers.SerializerMethodField()
     # Read-only community name
     community_name = serializers.CharField(source='community.name', read_only=True, allow_null=True) # Community should exist based on model clean()
     # Nested list of image references (S3 keys)
     images = ItemImageSerializer(many=True, read_only=True) # Images are typically managed via separate uploads
 
+    def get_owner(self, obj):
+        return UserProfileSerializer(obj.owner_profile).data
     class Meta:
         model = Item
         fields = [
@@ -70,7 +74,7 @@ class ItemSerializer(serializers.ModelSerializer):
             'pickup_details',
             'is_active',
             'average_item_rating', # Read-only calculated field
-            'owner_username',      # Read-only owner info
+            'owner',      # Read-only owner info
             'community_name',      # Read-only community info
             'images',              # List of associated image keys/captions
             'created_at',
@@ -79,7 +83,7 @@ class ItemSerializer(serializers.ModelSerializer):
         read_only_fields = [
             'availability_status', # Should be updated via transaction logic mostly
             'average_item_rating',
-            'owner_username',
+            'owner',
             'community_name',
             'images',           # Handled separately
             'created_at',
@@ -94,6 +98,10 @@ class ItemListSerializer(serializers.ModelSerializer):
     community_name = serializers.CharField(source='community.name', read_only=True, allow_null=True)
     # Optional: Add primary image S3 key if you implement logic to determine it
     primary_image_key = serializers.SerializerMethodField()
+    owner = serializers.SerializerMethodField()
+
+    def get_owner(self, obj):
+        return UserProfileSerializer(obj.owner_profile).data
 
     class Meta:
         model = Item
@@ -103,12 +111,18 @@ class ItemListSerializer(serializers.ModelSerializer):
             'category',
             'condition',
             'availability_status',
+            'availability_notes',
+            'deposit_amount',
+            'max_borrow_duration_days',
+            'pickup_details',
+            'is_active',
             'borrowing_fee',
             'owner_username',
             'community_name',
             'average_item_rating',
             'primary_image_key',
             'created_at',
+            'owner'
         ]
 
     # Example for getting primary image key
