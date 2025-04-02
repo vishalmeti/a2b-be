@@ -5,6 +5,8 @@ from rest_framework import viewsets, permissions, filters, mixins, generics
 from rest_framework.exceptions import PermissionDenied
 from django_filters.rest_framework import DjangoFilterBackend
 
+from apps.users.utils import S3ImageUploader
+
 from .models import Item, Category, ItemImage
 from .serializers import (
     ItemImageSerializer,
@@ -103,6 +105,30 @@ class ItemViewSet(
             raise PermissionDenied("You must belong to a community to list an item.")
         serializer.save(owner_profile=user_profile, community=user_profile.community)
 
+    def create(self, request, *args, **kwargs):
+        """Override create to attach images directly during item creation."""
+        request.data["is_active"] = True  # Ensure item is active by default
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        item_instance = serializer.instance
+ # Debugging breakpoint
+        # Check for 'images' in the uploaded files (handle multiple files)
+        image_files = request.FILES.getlist("images")
+        if image_files:
+            s3Helper = S3ImageUploader()
+            for image in image_files:
+                unique_id = uuid.uuid4().hex[:8]  # Short UUID for uniqueness
+                s3_key = f"items/{item_instance.pk}/{unique_id}"
+                s3Helper.upload_image(image, s3_key)
+                # Create the corresponding ItemImage record
+                ItemImage.objects.create(
+                    item=item_instance,
+                    s3_key=s3_key,
+                )
+
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
 class ItemImageUploadView(generics.CreateAPIView):
     """
@@ -137,98 +163,39 @@ class ItemImageUploadView(generics.CreateAPIView):
         """Handles the POST request with the image file upload."""
         item_pk = self.kwargs.get("item_pk")  # Get item ID from URL kwarg
         item_instance = self.get_item_object(item_pk)  # Gets item and checks permission
-
-        image_file = request.FILES.get(
-            "image"
+        s3Helper = S3ImageUploader()  # Initialize S3 uploader
+        image_file_list = request.FILES.getlist(
+            "images"
         )  # 'image' is the expected field name in form-data
         caption = request.data.get("caption", "")  # Get optional caption from form data
 
-        if not image_file:
+        if not image_file_list:
             return Response(
                 {"detail": "No image file provided in 'image' field."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         # --- 1. Construct the S3 Key ---
-        # We'll use a structure like: media/item_images/<item_slug_or_id>/<uuid>_<sanitized_filename>
-        item_identifier = (
-            slugify(item_instance.title)
-            if item_instance.title
-            else str(item_instance.id)
-        )
-        original_filename = image_file.name
-        filename_base, filename_ext = os.path.splitext(original_filename)
-        # Sanitize base filename and add UUID to prevent collisions
-        sanitized_filename_base = slugify(filename_base)
-        # Generate unique part AFTER sanitizing to avoid issues with '.' in UUIDs before ext
-        unique_id = uuid.uuid4().hex[:8]  # Short UUID for brevity
-        unique_filename = f"{sanitized_filename_base}-{unique_id}{filename_ext}"
 
-        # Get base path from settings (e.g., 'media')
-        s3_folder = getattr(
-            settings, "AWS_LOCATION", "media"
-        )  # Default to 'media' if not set
-        s3_key = os.path.join(
-            s3_folder, "item_images", str(item_instance.id), unique_filename
-        )
-        # Example key: media/item_images/123/my-cool-item-a1b2c3d4.jpg
+        for image_file in image_file_list:
+            unique_id = uuid.uuid4().hex[:8]  # Short UUID
+            s3_key = f"items/{item_pk}/{unique_id}"
+            
+            s3Helper.upload_image(
+                image_file, s3_key
+            )  # Upload the image to S3
 
-        # --- 2. Upload to S3 using Boto3 ---
-        bucket_name = settings.AWS_STORAGE_BUCKET_NAME
-        region = settings.AWS_S3_REGION_NAME
-        # Determine ACL based on settings (None means private/default)
-        acl = getattr(settings, "AWS_DEFAULT_ACL", None)
-
-        if not bucket_name:
-            # Log this properly in a real app
-            print("ERROR: AWS_STORAGE_BUCKET_NAME not configured in settings.")
-            return Response(
-                {"detail": "S3 storage is not configured."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            # --- 2. Create ItemImage instance ---
+            item_image_instance = ItemImage.objects.create(
+                item=item_instance,
+                s3_key=s3_key,  # Store the generated key
+                caption=caption,
             )
 
-        try:
-            # Create Boto3 client (ensure credentials and region are configured)
-            s3_client = boto3.client("s3", region_name=region)
 
-            extra_args = {"ContentType": image_file.content_type}
-            if acl:  # Only add ACL if it's explicitly set (like 'public-read')
-                extra_args["ACL"] = acl
 
-            # Use upload_fileobj for streaming upload from the request file
-            s3_client.upload_fileobj(
-                image_file,  # File object
-                bucket_name,  # Bucket
-                s3_key,  # Key (path/filename) in bucket
-                # ExtraArgs=extra_args # Pass ACL, ContentType etc. if needed
-            )
-            # Log success (replace print with proper logging)
-            print(f"Successfully uploaded {s3_key} to bucket {bucket_name}")
 
-        except ClientError as e:
-            # Log error (replace print with proper logging)
-            print(f"ERROR: S3 Upload ClientError for key {s3_key}: {e}")
-            return Response(
-                {"detail": "Failed to upload image to storage."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-        except Exception as e:
-            # Log unexpected errors (replace print with proper logging)
-            print(f"ERROR: Unexpected error during S3 upload for key {s3_key}: {e}")
-            return Response(
-                {"detail": "An unexpected error occurred during upload."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-
-        # --- 3. Create ItemImage Record ---
-        # If upload was successful, create the database record
-        item_image_instance = ItemImage.objects.create(
-            item=item_instance,
-            s3_key=s3_key,  # Store the generated key
-            caption=caption,
-        )
-
-        # --- 4. Return Response ---
+        # --- 3. Return Response ---
         # Serialize the created ItemImage record using the serializer defined for this view
         response_serializer = self.get_serializer(item_image_instance)
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)

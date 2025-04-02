@@ -20,9 +20,6 @@ class ActorProfileSerializer(serializers.ModelSerializer):
         model = UserProfile
         fields = ['user_id', 'username'] # user_id is the PK (user.id)
 
-    # def get_profile_picture_url(self, obj):
-    #     from path.to.utils import generate_s3_presigned_url # Import your utility
-    #     return generate_s3_presigned_url(obj.profile_picture_s3_key)
 
 
 class NotificationSerializer(serializers.ModelSerializer):

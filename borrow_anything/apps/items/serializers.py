@@ -5,13 +5,12 @@ from rest_framework import serializers
 from apps.users.serializers import UserProfileSerializer
 from .models import Category, Item, ItemImage
 from apps.users.models import UserProfile # Needed for owner info later if required
-from .utils import generate_s3_presigned_url
 # Import UserProfileSerializer if needed for owner details later
 # from apps.users.serializers import UserProfileSerializer
 import boto3
 from botocore.exceptions import ClientError
 from django.conf import settings
-
+from apps.users.utils import S3ImageUploader
 import boto3
 from botocore.exceptions import ClientError
 from django.conf import settings
@@ -37,8 +36,7 @@ class ItemImageSerializer(serializers.ModelSerializer):
     def get_image_url(self, obj):
         """ Calls the utility function to generate the pre-signed URL. """
         # obj is the ItemImage instance
-        return generate_s3_presigned_url(obj.s3_key)
-
+        return S3ImageUploader().get_image_presigned_url(obj.s3_key)
 class ItemSerializer(serializers.ModelSerializer):
     """ Serializer for the Item model (Detailed View) """
     # Nested read-only category info
@@ -97,7 +95,7 @@ class ItemListSerializer(serializers.ModelSerializer):
     owner_username = serializers.CharField(source='owner_profile.user.username', read_only=True)
     community_name = serializers.CharField(source='community.name', read_only=True, allow_null=True)
     # Optional: Add primary image S3 key if you implement logic to determine it
-    primary_image_key = serializers.SerializerMethodField()
+    images = serializers.SerializerMethodField()
     owner = serializers.SerializerMethodField()
 
     def get_owner(self, obj):
@@ -120,18 +118,23 @@ class ItemListSerializer(serializers.ModelSerializer):
             'owner_username',
             'community_name',
             'average_item_rating',
-            'primary_image_key',
+            'images',
             'created_at',
             'owner'
         ]
 
     # Example for getting primary image key
-    def get_primary_image_key(self, obj):
+    def get_images(self, obj):
         """ Gets the first associated ItemImage and generates its pre-signed URL. """
         # obj is the Item instance
-        first_image = obj.images.first() # Use the related_name 'images'
-        if first_image:
-            return generate_s3_presigned_url(first_image.s3_key)
+        images_instance = ItemImage.objects.filter(item=obj) 
+        images = []
+        if images_instance.exists():
+            for image in images_instance:
+                images.append(
+                    S3ImageUploader().get_image_presigned_url(image.s3_key)
+                )
+            return images
         return None
 
 
