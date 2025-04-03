@@ -43,6 +43,13 @@ class UserProfile(models.Model):
         help_text="S3 object key for the profile picture",
     )
 
+    cover_photo_s3_key = models.CharField(
+        max_length=1024,
+        blank=True,
+        null=True,  # Allow cover photo to be optional
+        help_text="S3 object key for the cover photo",
+    )
+
     is_community_member_verified = models.BooleanField(
         default=False,
         help_text="Is user's membership in their selected community verified (e.g., via RWA check)?",
