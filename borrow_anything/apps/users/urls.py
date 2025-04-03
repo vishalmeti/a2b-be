@@ -12,5 +12,8 @@ urlpatterns = [
     path(
         "profile-image/", views.ProfileImageUploadView.as_view(), name="profile-image"
     ),
+    path(
+        "cover-image/", views.CoverImageUploadView.as_view(), name="cover-image"
+    )
     # Add other user-related URLs later (e.g., signup, password change)
 ]

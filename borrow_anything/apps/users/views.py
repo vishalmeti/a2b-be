@@ -69,7 +69,7 @@ class ProfileImageUploadView(APIView):
         """Get a presigned URL for uploading profile image."""
         try:
             # Generate a unique S3 key for the image
-            s3_key = f"profile-images/{request.user.id}/profile.jpg"
+            s3_key = f"users/{request.user.id}/profile.jpg"
             # get the file from the request
             file = request.data.get("image")
             # Check if the file is provided
@@ -83,6 +83,34 @@ class ProfileImageUploadView(APIView):
                 # Optionally, you can save the image metadata to the user's profile
                 user_profile = UserProfile.objects.get(user=request.user)
                 user_profile.profile_picture_s3_key = s3_key
+                user_profile.save()
+                # Return the presigned URL and S3 key
+                # in the response
+            return Response({"presigned_url": presigned_url, "s3_key": s3_key})
+        except Exception as e:
+            return Response(
+                {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class CoverImageUploadView(APIView):
+    def post(self, request):
+        """Get a presigned URL for uploading cover image."""
+        try:
+            # Generate a unique S3 key for the image
+            s3_key = f"users/{request.user.id}/cover-image.jpg"
+            # get the file from the request
+            file = request.data.get("cover-image")
+            # Check if the file is provided
+            if not file:
+                return Response(
+                    {"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST
+                )
+            uploader = S3ImageUploader()
+            presigned_url = uploader.upload_image(file, s3_key)
+            if presigned_url:
+                # Optionally, you can save the image metadata to the user's profile
+                user_profile = UserProfile.objects.get(user=request.user)
+                user_profile.cover_photo_s3_key = s3_key
                 user_profile.save()
                 # Return the presigned URL and S3 key
                 # in the response

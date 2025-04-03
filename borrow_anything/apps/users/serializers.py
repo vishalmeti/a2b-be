@@ -44,6 +44,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     last_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
 
     profile_picture_url = serializers.SerializerMethodField()
+    cover_image_url = serializers.SerializerMethodField()
 
     def get_profile_picture_url(self, obj):
         """
@@ -52,6 +53,15 @@ class UserProfileSerializer(serializers.ModelSerializer):
         """
         if obj.profile_picture_s3_key:
             return S3Helper.get_image_presigned_url(obj.profile_picture_s3_key)
+        return None
+    
+    def get_cover_image_url(self, obj):
+        """
+        Generate a presigned URL for the cover image stored in S3.
+        This is read-only and should not be updated via the API.
+        """
+        if obj.cover_photo_s3_key:
+            return S3Helper.get_image_presigned_url(obj.cover_photo_s3_key)
         return None
 
     class Meta:
@@ -73,6 +83,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "average_borrower_rating",  # Read-only, calculated field
             "updated_at",  # Read-only
             "profile_picture_url",  # Presigned URL for the profile picture
+            "cover_image_url",  # Presigned URL for the cover image
         ]
         # Specify fields that should *not* be updatable via a PUT/PATCH to /me/
         read_only_fields = [
