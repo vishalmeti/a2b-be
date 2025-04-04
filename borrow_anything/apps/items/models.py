@@ -172,6 +172,9 @@ class Item(models.Model):
         # For example, if the item is not active, set it to UNAVAILABLE
         if not self.is_active:
             self.availability_status = self.AvailabilityStatus.UNAVAILABLE
+        
+        if self.is_active and self.availability_status == self.AvailabilityStatus.UNAVAILABLE:
+            self.availability_status = self.AvailabilityStatus.AVAILABLE
 
         # Add logic later to ensure availability_status reflects actual borrowing status
         super().save(*args, **kwargs)
