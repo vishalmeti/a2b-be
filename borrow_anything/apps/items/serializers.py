@@ -106,6 +106,7 @@ class ItemListSerializer(serializers.ModelSerializer):
         fields = [ # Select fewer fields for list views
             'id',
             'title',
+            "description",
             'category',
             'condition',
             'availability_status',
@@ -153,6 +154,7 @@ class ItemCreateUpdateSerializer(serializers.ModelSerializer):
         model = Item
         # Fields that the owner can create or update
         fields = [
+            'id',
             'title',
             'description',
             'category',

@@ -73,17 +73,18 @@ class ItemViewSet(
         if not user_profile or not user_profile.community:
             return Item.objects.none()
 
+        user_id = self.request.query_params.get("user_id", None)
+
         queryset = (
-            Item.objects.filter(community=user_profile.community, is_active=True)
+            Item.objects.filter(community=user_profile.community)
             .select_related("owner_profile__user", "category", "community")
             .prefetch_related("images")
         )
 
-        user_id = self.request.query_params.get("user_id", None)
         if user_id:
-            queryset = queryset.filter(owner_profile__user_id=user_id)
+            return queryset.filter(owner_profile__user_id=user_id)
 
-        return queryset
+        return queryset.filter(is_active=True)
 
     def get_serializer_class(self):
         """Return appropriate serializer based on action."""
@@ -93,7 +94,7 @@ class ItemViewSet(
         )  # Use getattr for safety, though action should exist
         if action == "list":
             return ItemListSerializer
-        if action in ["create", "update", "partial_update"]:
+        if action in ["create", "update"]:
             return ItemCreateUpdateSerializer
         # Default for 'retrieve' or if action is None
         return ItemSerializer

@@ -168,6 +168,11 @@ class Item(models.Model):
             else:  # Fallback if owner has community but it wasn't assigned
                 self.community = self.owner_profile.community
 
+        # Optionally, you can add logic to set availability_status based on conditions
+        # For example, if the item is not active, set it to UNAVAILABLE
+        if not self.is_active:
+            self.availability_status = self.AvailabilityStatus.UNAVAILABLE
+
         # Add logic later to ensure availability_status reflects actual borrowing status
         super().save(*args, **kwargs)
 
