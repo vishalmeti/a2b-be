@@ -152,14 +152,35 @@ erDiagram
     USER_PROFILE ||--o{ BORROWING_REQUEST : "lent via (lender)"
     BORROWING_REQUEST ||--|| REVIEW : "reviewed via"
 
-    %% --- Planned Models (Relationships Only) ---
-    %% BORROWING_REQUEST }o--o{ CHAT_MESSAGE : "has messages"
-    %% USER_PROFILE }o--o{ CHAT_MESSAGE : "sent message"
-    %% USER_PROFILE ||--o{ NOTIFICATION : "receives notification"
-    %% BORROWING_REQUEST }o--|| NOTIFICATION : "about request (optional)"
-    %% ITEM }o--|| NOTIFICATION : "about item (optional)"
-    %% USER_PROFILE }o--|| NOTIFICATION : "about user (optional)"
+    %% --- Communication & Notifications ---
+    CHAT_MESSAGE {
+        int id PK
+        int borrowing_request_id FK
+        int sender_profile_id FK
+        string message_text
+        bool is_read
+        datetime created_at
+    }
+    NOTIFICATION {
+        int id PK
+        int recipient_profile_id FK
+        int borrowing_request_id FK "(nullable)"
+        int item_id FK "(nullable)"
+        int related_profile_id FK "(nullable)"
+        string notification_type "Choices"
+        string message
+        bool is_read
+        string action_url "(nullable)"
+        datetime created_at
+        datetime read_at "(nullable)"
+    }
 
+    BORROWING_REQUEST ||--o{ CHAT_MESSAGE : "has messages"
+    USER_PROFILE ||--o{ CHAT_MESSAGE : "sent message"
+    USER_PROFILE ||--o{ NOTIFICATION : "receives notification"
+    BORROWING_REQUEST }o--o{ NOTIFICATION : "about request (optional)"
+    ITEM }o--o{ NOTIFICATION : "about item (optional)"
+    USER_PROFILE }o--o{ NOTIFICATION : "related to user (optional)"
 ```
 
 
