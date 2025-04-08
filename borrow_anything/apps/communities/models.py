@@ -13,6 +13,10 @@ class Community(models.Model):
         help_text="Official or commonly known name (e.g., Prestige Shantiniketan)",
     )
     city = models.CharField(max_length=100, db_index=True)
+    description = models.TextField(
+        blank=True,
+        help_text="Short description of the community (e.g., location, features)",
+    )
     pincode = models.CharField(max_length=10, db_index=True)
     latitude = models.DecimalField(
         max_digits=10,
@@ -72,6 +76,10 @@ class CommunitySuggestion(models.Model):
         max_length=200, help_text="Name suggested by the user"
     )
     city = models.CharField(max_length=100)
+    description = models.TextField(
+        blank=True,
+        help_text="Short description of the community (e.g., location, features)",
+    )
     pincode = models.CharField(max_length=10)
     suggested_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

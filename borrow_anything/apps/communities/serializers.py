@@ -14,6 +14,7 @@ class CommunitySerializer(serializers.ModelSerializer):
             'name',
             'city',
             'pincode',
+            'description',
             'latitude',       # Optional: useful for map features
             'longitude',      # Optional: useful for map features
             'is_officially_verified', # Might be useful info for users
@@ -33,6 +34,7 @@ class CommunitySuggestionSerializer(serializers.ModelSerializer):
         fields = [
             'id',               # Returned in response after creation
             'suggested_name',
+            'description',
             'city',
             'pincode',
             # 'suggested_by' is set in the view, not sent by the client

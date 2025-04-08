@@ -13,6 +13,7 @@ class CommunityAdmin(admin.ModelAdmin):
         "name",
         "city",
         "pincode",
+        "description",
         "is_approved",
         "is_active",
         "is_officially_verified",
@@ -36,6 +37,7 @@ class CommunitySuggestionAdmin(admin.ModelAdmin):
         "city",
         "pincode",
         "status",
+        "description",
         "suggested_by_link",
         "created_at",
         "reviewed_at",
@@ -58,6 +60,7 @@ class CommunitySuggestionAdmin(admin.ModelAdmin):
         "pincode",
         "suggested_by",
         "status",
+        "description",
         "admin_notes",
         "created_community",
         "created_at",
@@ -105,6 +108,7 @@ class CommunitySuggestionAdmin(admin.ModelAdmin):
                 new_community = Community.objects.create(
                     name=suggestion.suggested_name,
                     city=suggestion.city,
+                    description=suggestion.description,
                     pincode=suggestion.pincode,
                     is_approved=True,  # Approve it
                     is_active=True,  # Make it active
