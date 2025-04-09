@@ -87,6 +87,20 @@ class CommunitySuggestion(models.Model):
         null=True,
         related_name="community_suggestions",
     )
+    latitude = models.DecimalField(
+        max_digits=10,
+        decimal_places=7,
+        null=True,
+        blank=True,
+        help_text="Approximate center latitude",
+    )
+    longitude = models.DecimalField(
+        max_digits=10,
+        decimal_places=7,
+        null=True,
+        blank=True,
+        help_text="Approximate center longitude",
+    )
     status = models.CharField(
         max_length=20,
         choices=SuggestionStatus.choices,

@@ -35,6 +35,8 @@ class CommunitySuggestionSerializer(serializers.ModelSerializer):
             'id',               # Returned in response after creation
             'suggested_name',
             'description',
+            'latitude',
+            'longitude',
             'city',
             'pincode',
             # 'suggested_by' is set in the view, not sent by the client

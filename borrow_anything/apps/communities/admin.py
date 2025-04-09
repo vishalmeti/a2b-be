@@ -37,6 +37,8 @@ class CommunitySuggestionAdmin(admin.ModelAdmin):
         "city",
         "pincode",
         "status",
+        'longitude',
+        'latitude',
         "description",
         "suggested_by_link",
         "created_at",
@@ -61,6 +63,8 @@ class CommunitySuggestionAdmin(admin.ModelAdmin):
         "suggested_by",
         "status",
         "description",
+        "longitude",
+        "latitude",
         "admin_notes",
         "created_community",
         "created_at",
@@ -109,6 +113,8 @@ class CommunitySuggestionAdmin(admin.ModelAdmin):
                     name=suggestion.suggested_name,
                     city=suggestion.city,
                     description=suggestion.description,
+                    latitude=suggestion.latitude,
+                    longitude=suggestion.longitude,
                     pincode=suggestion.pincode,
                     is_approved=True,  # Approve it
                     is_active=True,  # Make it active
