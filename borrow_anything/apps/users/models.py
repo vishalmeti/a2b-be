@@ -76,5 +76,51 @@ class UserProfile(models.Model):
         return f"{self.user.username} ({community_name})"
 
 
-# Optional: Signal handler can still be added here or later
-# It won't affect the community field yet.
+class UserCommunityMembership(models.Model):
+    """
+    Tracks membership of users across multiple communities.
+    A user can join multiple communities and this model records those relationships.
+    """
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="community_memberships"
+    )
+    community = models.ForeignKey(
+        Community,
+        on_delete=models.CASCADE,
+        related_name="user_memberships"
+    )
+    is_verified = models.BooleanField(
+        default=False,
+        help_text="Is user's membership in this community verified (e.g., via RWA check)?"
+    )
+    is_primary = models.BooleanField(
+        default=False,
+        help_text="Is this the user's primary community? Only one community can be primary."
+    )
+    joined_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ['user', 'community']
+        verbose_name_plural = "User Community Memberships"
+    
+    def __str__(self):
+        return f"{self.user.username} in {self.community.name}"
+    
+    def save(self, *args, **kwargs):
+        # If this membership is being set as primary, unset any other primary memberships
+        if self.is_primary:
+            # Get all other memberships for this user
+            UserCommunityMembership.objects.filter(
+                user=self.user, 
+                is_primary=True
+            ).exclude(pk=self.pk).update(is_primary=False)
+            
+            # Also update the user's profile to make this their primary community
+            profile, created = UserProfile.objects.get_or_create(user=self.user)
+            profile.community = self.community
+            profile.save(update_fields=['community'])
+            
+        super().save(*args, **kwargs)

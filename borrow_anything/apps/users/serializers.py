@@ -3,7 +3,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model # Use this to get the active User model
 from django.contrib.auth.password_validation import validate_password
-from .models import UserProfile
+from .models import UserProfile, UserCommunityMembership
 from apps.communities.models import Community
 from .utils import S3ImageUploader
 
@@ -21,6 +21,42 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ['id', 'username', 'first_name', 'last_name', 'email']
         # Usually, you don't want to update these base fields directly via the profile
         read_only_fields = fields
+
+
+class CommunitySerializer(serializers.ModelSerializer):
+    """Simple serializer for displaying community information"""
+    class Meta:
+        model = Community
+        fields = ['id', 'name', 'city', 'pincode', 'description', 'is_active', 'is_officially_verified']
+        read_only_fields = fields
+
+
+class UserCommunityMembershipSerializer(serializers.ModelSerializer):
+    """
+    Serializer for the UserCommunityMembership model.
+    Used for managing user's community memberships.
+    """
+    community_details = CommunitySerializer(source='community', read_only=True)
+    
+    class Meta:
+        model = UserCommunityMembership
+        fields = [
+            'id', 
+            'community', 
+            'community_details',
+            'is_verified', 
+            'is_primary', 
+            'joined_at', 
+            'updated_at'
+        ]
+        read_only_fields = ['is_verified', 'joined_at', 'updated_at']
+
+    def validate(self, data):
+        # Ensure the community is active and approved
+        community = data.get('community')
+        if community and not (community.is_active and community.is_approved):
+            raise serializers.ValidationError("This community is not available for joining.")
+        return data
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
@@ -45,6 +81,9 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     profile_picture_url = serializers.SerializerMethodField()
     cover_image_url = serializers.SerializerMethodField()
+    
+    # Add communities field to display user's memberships
+    communities = serializers.SerializerMethodField()
 
     def get_profile_picture_url(self, obj):
         """
@@ -63,6 +102,14 @@ class UserProfileSerializer(serializers.ModelSerializer):
         if obj.cover_photo_s3_key:
             return S3Helper.get_image_presigned_url(obj.cover_photo_s3_key)
         return None
+    
+    def get_communities(self, obj):
+        """
+        Get all communities the user is a member of.
+        Returns serialized membership data with community details.
+        """
+        memberships = UserCommunityMembership.objects.filter(user=obj.user)
+        return UserCommunityMembershipSerializer(memberships, many=True).data
 
     class Meta:
         model = UserProfile
@@ -84,6 +131,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "updated_at",  # Read-only
             "profile_picture_url",  # Presigned URL for the profile picture
             "cover_image_url",  # Presigned URL for the cover image
+            "communities",  # List of all communities user belongs to
         ]
         # Specify fields that should *not* be updatable via a PUT/PATCH to /me/
         read_only_fields = [

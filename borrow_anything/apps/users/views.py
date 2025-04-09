@@ -1,4 +1,4 @@
-from django.shortcuts import render
+from django.shortcuts import render, get_object_or_404
 
 # Create your views here.
 # apps/users/views.py
@@ -7,14 +7,16 @@ from rest_framework import generics, permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .models import UserProfile
-from .serializers import UserProfileSerializer  # Make sure this serializer is defined
+from .models import UserProfile, UserCommunityMembership
+from .serializers import UserProfileSerializer, UserCreateSerializer, UserCommunityMembershipSerializer
 from django.contrib.auth import get_user_model
-from .serializers import UserCreateSerializer
 from .utils import S3ImageUploader
+from apps.communities.models import Community
+from rest_framework.exceptions import ValidationError
 import uuid
 
 User = get_user_model()
+
 class ManageUserView(generics.RetrieveUpdateAPIView):
     """
     View to retrieve and update the profile of the currently authenticated user.
@@ -92,6 +94,7 @@ class ProfileImageUploadView(APIView):
                 {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+
 class CoverImageUploadView(APIView):
     def post(self, request):
         """Get a presigned URL for uploading cover image."""
@@ -119,3 +122,80 @@ class CoverImageUploadView(APIView):
             return Response(
                 {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class UserCommunityMembershipListView(generics.ListCreateAPIView):
+    """
+    View to list all communities a user is a member of and to join new communities.
+    """
+    serializer_class = UserCommunityMembershipSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        """Return all communities the current user is a member of"""
+        return UserCommunityMembership.objects.filter(user=self.request.user)
+    
+    def perform_create(self, serializer):
+        """Join a new community"""
+        # Check if the user is already a member of this community
+        community = serializer.validated_data['community']
+        if UserCommunityMembership.objects.filter(user=self.request.user, community=community).exists():
+            raise ValidationError("You are already a member of this community.")
+        
+        # Determine if this should be the primary community
+        is_primary = serializer.validated_data.get('is_primary', False)
+        
+        # If this is the user's first community, automatically make it primary
+        if not UserCommunityMembership.objects.filter(user=self.request.user).exists():
+            is_primary = True
+            
+        serializer.save(user=self.request.user, is_primary=is_primary)
+
+
+class UserCommunityMembershipDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    View to retrieve, update, or delete a specific community membership.
+    Update can be used to set a community as primary.
+    Delete is used to leave a community.
+    """
+    serializer_class = UserCommunityMembershipSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        """Return only memberships owned by the current user"""
+        return UserCommunityMembership.objects.filter(user=self.request.user)
+    
+    def destroy(self, request, *args, **kwargs):
+        """Handle leaving a community"""
+        membership = self.get_object()
+        
+        # Check if this is the user's primary community
+        if membership.is_primary:
+            # Find another community to make primary if possible
+            other_membership = UserCommunityMembership.objects.filter(
+                user=self.request.user
+            ).exclude(id=membership.id).first()
+            
+            # If user has another community, make it primary
+            if other_membership:
+                other_membership.is_primary = True
+                other_membership.save()
+                
+                # Update user profile to use this community
+                profile, created = UserProfile.objects.get_or_create(user=self.request.user)
+                profile.community = other_membership.community
+                profile.save(update_fields=['community'])
+            else:
+                # If no other communities, clear the primary community in user profile
+                profile, created = UserProfile.objects.get_or_create(user=self.request.user)
+                profile.community = None
+                profile.save(update_fields=['community'])
+        
+        return super().destroy(request, *args, **kwargs)
+    
+    def perform_update(self, serializer):
+        """Handle updating a membership, particularly when setting as primary"""
+        is_primary = serializer.validated_data.get('is_primary', False)
+        
+        # If setting as primary, the save method in the model will handle making other memberships non-primary
+        serializer.save(is_primary=is_primary)

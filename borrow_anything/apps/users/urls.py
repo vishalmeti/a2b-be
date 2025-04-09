@@ -14,6 +14,17 @@ urlpatterns = [
     ),
     path(
         "cover-image/", views.CoverImageUploadView.as_view(), name="cover-image"
-    )
+    ),
+    # Community membership endpoints
+    path(
+        "communities/", 
+        views.UserCommunityMembershipListView.as_view(), 
+        name="community-memberships"
+    ),
+    path(
+        "communities/<int:pk>/", 
+        views.UserCommunityMembershipDetailView.as_view(), 
+        name="community-membership-detail"
+    ),
     # Add other user-related URLs later (e.g., signup, password change)
 ]
