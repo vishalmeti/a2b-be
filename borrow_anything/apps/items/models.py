@@ -135,39 +135,17 @@ class Item(models.Model):
     def clean(self):
         """
         Custom validation run before saving (e.g., in Django Admin or ModelForms).
-        Ensures the owner has a community set.
         """
         super().clean()  # Call parent clean method first
-        if self.owner_profile and not self.owner_profile.community:
-            raise ValidationError(
-                "Item owner must belong to a community before listing an item."
-            )
-        # Assign community from owner if not already set (e.g., during creation)
-        if self.owner_profile and self.owner_profile.community and not self.community:
-            self.community = self.owner_profile.community
+        
+        # Remove automatic community assignment and require it to be explicitly set
+        if not self.community:
+            raise ValidationError("Community must be specified when creating an item.")
 
     def save(self, *args, **kwargs):
-        # Ensure item's community matches owner's community upon saving
-        # This overrides any direct assignment if owner profile exists and has a community
-        if self.owner_profile and self.owner_profile.community:
-            self.community = self.owner_profile.community
-
-        # Run full clean validation before saving, includes check in clean()
-        # Note: clean() is not called automatically on model.save(), only full_clean() does.
-        # Or rely on validation at the form/serializer level. For simplicity here,
-        # we'll ensure community is set based on owner before super().save().
-        if not self.community:
-            # This should ideally be caught by clean() if called,
-            # but adding check here for direct .save() calls.
-            if self.owner_profile and not self.owner_profile.community:
-                raise ValueError(
-                    "Item owner must belong to a community to list an item."
-                )
-            elif not self.owner_profile:
-                raise ValueError("Item must have an owner profile.")
-            else:  # Fallback if owner has community but it wasn't assigned
-                self.community = self.owner_profile.community
-
+        # Remove automatic community assignment from owner's profile
+        # The community should now be provided in the request data
+        
         # Optionally, you can add logic to set availability_status based on conditions
         # For example, if the item is not active, set it to UNAVAILABLE
         if not self.is_active:

@@ -3,6 +3,7 @@
 from rest_framework import serializers
 
 from apps.users.serializers import UserProfileSerializer
+from apps.communities.models import Community
 from .models import Category, Item, ItemImage
 from apps.users.models import UserProfile # Needed for owner info later if required
 # Import UserProfileSerializer if needed for owner details later
@@ -149,6 +150,14 @@ class ItemCreateUpdateSerializer(serializers.ModelSerializer):
         queryset=Category.objects.filter(is_active=True),
         allow_null=False # Category is mandatory
     )
+    
+    # Add community_id field to allow setting community by ID
+    community_id = serializers.PrimaryKeyRelatedField(
+        source='community',
+        queryset=Community.objects.all(),
+        required=False,
+        write_only=True
+    )
 
     class Meta:
         model = Item
@@ -162,6 +171,7 @@ class ItemCreateUpdateSerializer(serializers.ModelSerializer):
             'availability_notes',
             'deposit_amount',
             'borrowing_fee',
+            'community_id', # Allow setting community by ID
             'max_borrow_duration_days',
             'pickup_details',
             'is_active', # Allow owner to deactivate/reactivate
@@ -173,7 +183,5 @@ class ItemCreateUpdateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Selected category is not active.")
         return value
 
-    # NOTE: The 'owner_profile' and 'community' fields must be set in the
-    # view's perform_create method, not provided directly by the client.
-    # Handling image uploads and linking ItemImage records (with s3_key)
-    # needs to happen in the view or preferably a dedicated image upload endpoint.
+    # NOTE: The 'owner_profile' field must be set in the view's perform_create method.
+    # If 'community_id' is not provided, fall back to owner's community.

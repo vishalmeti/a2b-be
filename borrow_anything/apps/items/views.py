@@ -103,20 +103,31 @@ class ItemViewSet(
         return ItemSerializer
 
     def perform_create(self, serializer):
-        """Assign owner and community automatically when creating an item."""
+        """Assign owner automatically when creating an item."""
         user_profile = getattr(self.request.user, "profile", None)
-        if not user_profile or not user_profile.community:
-            raise PermissionDenied("You must belong to a community to list an item.")
-        serializer.save(owner_profile=user_profile, community=user_profile.community)
+        if not user_profile:
+            raise PermissionDenied("User profile not found.")
+        
+        # Get community_id from request data instead of automatically using user's community
+        serializer.save(owner_profile=user_profile)
 
     def create(self, request, *args, **kwargs):
         """Override create to attach images directly during item creation."""
         request.data["is_active"] = True  # Ensure item is active by default
+        
+        # Validate the community_id exists in the request data
+        if "community_id" not in request.data:
+            return Response(
+                {"detail": "community_id is required to create an item."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
         item_instance = serializer.instance
- # Debugging breakpoint
+
+        # Debugging breakpoint
         # Check for 'images' in the uploaded files (handle multiple files)
         image_files = request.FILES.getlist("images")
         if image_files:
