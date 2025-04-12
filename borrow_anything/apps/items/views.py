@@ -67,16 +67,19 @@ class ItemViewSet(
     # --- The internal logic remains the same as before ---
 
     def get_queryset(self):
-        """Filter items to only show those in the user's community by default."""
+        """Filter items to show those in any of the user's communities."""
         user = self.request.user
-        user_profile = getattr(user, "profile", None)
-        if not user_profile or not user_profile.community:
+        
+        # Get all communities the user is a member of
+        user_communities = user.community_memberships.values_list('community_id', flat=True)
+        
+        if not user_communities:
             return Item.objects.none()
 
         user_id = self.request.query_params.get("user_id", None)
-
+        
         queryset = (
-            Item.objects.filter(community=user_profile.community)
+            Item.objects.filter(community_id__in=user_communities)
             .select_related("owner_profile__user", "category", "community")
             .prefetch_related("images")
         )
