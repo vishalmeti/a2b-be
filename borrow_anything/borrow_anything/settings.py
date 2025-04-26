@@ -32,6 +32,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",  # Also include 127.0.0.1 variant
     "http://192.168.1.41:3000",
     "https://shardit.vercel.app",
+    "*",  # Allow all origins (not recommended for production)
     # Vite network address (replace if your IP changes)
     # Add any other origins you need (e.g., your deployed frontend URL later)
 ]

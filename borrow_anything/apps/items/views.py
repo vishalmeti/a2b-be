@@ -111,6 +111,11 @@ class ItemViewSet(
         # Get community_id from request data instead of automatically using user's community
         serializer.save(owner_profile=user_profile)
 
+    def perform_update(self, serializer):
+        """Handle updating an item and ensure the community_id is properly processed."""
+        # The community_id will be handled by the serializer (already configured in ItemCreateUpdateSerializer)
+        serializer.save()
+
     def create(self, request, *args, **kwargs):
         """Override create to attach images directly during item creation."""
         request.data["is_active"] = True  # Ensure item is active by default

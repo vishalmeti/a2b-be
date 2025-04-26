@@ -155,8 +155,8 @@ class ItemCreateUpdateSerializer(serializers.ModelSerializer):
     community_id = serializers.PrimaryKeyRelatedField(
         source='community',
         queryset=Community.objects.all(),
-        required=False,
-        write_only=True
+        required=True,  # Make this required to ensure community is always specified
+        write_only=True # Only used for creating/updating
     )
 
     class Meta:
@@ -183,5 +183,10 @@ class ItemCreateUpdateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Selected category is not active.")
         return value
 
+    def validate_community_id(self, value):
+        """Validate the provided community exists"""
+        if not value:
+            raise serializers.ValidationError("Community ID is required.")
+        return value
+
     # NOTE: The 'owner_profile' field must be set in the view's perform_create method.
-    # If 'community_id' is not provided, fall back to owner's community.
