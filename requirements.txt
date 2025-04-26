@@ -1,17 +1,22 @@
+# requirements.txt
+
 asgiref==3.8.1
-boto3==1.37.23
-botocore==1.37.23
+boto3==1.37.23        # Needed if your app interacts with AWS services (like S3)
+botocore==1.37.23     # Dependency for boto3
+dj-database-url       # ADDED: Helps parse DATABASE_URL env var
 Django==5.1.7
 django-cors-headers==4.7.0
 django-filter==25.1
 djangorestframework==3.16.0
 djangorestframework_simplejwt==5.5.0
-jmespath==1.0.1
-psycopg2-binary==2.9.10
-PyJWT==2.9.0
-python-dateutil==2.9.0.post0
-python-decouple==3.8
-s3transfer==0.11.4
-six==1.17.0
-sqlparse==0.5.3
-urllib3==2.3.0
+gunicorn              # ADDED: Production WSGI server required for Cloud Run
+jmespath==1.0.1       # Dependency for boto3
+psycopg2-binary==2.9.10 # PostgreSQL adapter for Neon DB
+PyJWT==2.9.0          # Dependency for djangorestframework_simplejwt
+python-dateutil==2.9.0.post0 # Dependency for boto3
+python-decouple==3.8  # Good for handling settings
+s3transfer==0.11.4    # Dependency for boto3
+six==1.17.0           # Common dependency
+sqlparse==0.5.3       # Dependency for Django
+urllib3==2.3.0        # Dependency for boto3
+whitenoise[brotli]    # ADDED: For serving static files efficiently (brotli extra is recommended)
