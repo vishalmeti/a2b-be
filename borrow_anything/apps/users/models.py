@@ -3,6 +3,7 @@
 from django.db import models
 from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.db.models import F, ExpressionWrapper, FloatField
 from apps.communities.models import Community
 
 # Note: We are NOT importing Community model yet
@@ -67,6 +68,16 @@ class UserProfile(models.Model):
         validators=[MinValueValidator(1.0), MaxValueValidator(5.0)],
     )
 
+    # Rating fields
+    average_rating = models.FloatField(
+        default=3.0,
+        validators=[MinValueValidator(0.0), MaxValueValidator(5.0)],
+        help_text="Average rating received by the user (0-5)",
+    )
+    rating_count = models.PositiveIntegerField(
+        default=0, help_text="Total number of ratings received"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -74,6 +85,24 @@ class UserProfile(models.Model):
         # Update the string representation to include community name again
         community_name = self.community.name if self.community else "No Community"
         return f"{self.user.username} ({community_name})"
+
+    def update_rating(self, new_rating):
+        """
+        Updates the user's average rating based on a new rating received.
+        Handles the calculation atomically to prevent race conditions.
+        """
+        if new_rating is None or not (1 <= new_rating <= 5):
+            return # Do nothing if the rating is invalid
+
+        # Use F expressions for atomic update
+        UserProfile.objects.filter(pk=self.pk).update(
+            average_rating=(
+                (F('average_rating') * F('rating_count')) + new_rating
+            ) / (F('rating_count') + 1),
+            rating_count=F('rating_count') + 1
+        )
+        # Refresh the instance data from the database
+        self.refresh_from_db(fields=['average_rating', 'rating_count'])
 
 
 class UserCommunityMembership(models.Model):

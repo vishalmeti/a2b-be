@@ -18,6 +18,7 @@ from .serializers import (
     ReviewSerializer,
 )
 from apps.items.models import Item
+from apps.users.models import UserProfile  # Import UserProfile
 
 from .permissions import IsReviewParticipant
 
@@ -500,6 +501,7 @@ class ReviewViewSet(
         Custom logic run during update (called by UpdateModelMixin's update/partial_update).
         Ensures only the correct user updates their respective fields and sets submission timestamp.
         """
+        # Debugging breakpoint
         instance = serializer.instance  # The Review object being updated/saved
         user_profile = getattr(self.request.user, "profile", None)
         borrowing_request = instance.borrowing_request
@@ -602,5 +604,21 @@ class ReviewViewSet(
                 f"Error saving review for request {instance.borrowing_request_id}: {e}"
             )  # Use logging
             raise  # Re-raise the original exception
+
+        # 4. Update UserProfile ratings after successful save
+        instance.refresh_from_db()  # Ensure we have the latest data
+        borrowing_request = instance.borrowing_request
+
+        # If borrower submitted review, update lender's rating
+        if "borrower_review_submitted_at" in save_kwargs and instance.rating_for_lender is not None:
+            lender_profile = borrowing_request.lender_profile
+            if lender_profile:
+                lender_profile.update_rating(instance.rating_for_lender)
+
+        # If lender submitted review, update borrower's rating
+        if "lender_review_submitted_at" in save_kwargs and instance.rating_for_borrower is not None:
+            borrower_profile = borrowing_request.borrower_profile
+            if borrower_profile:
+                borrower_profile.update_rating(instance.rating_for_borrower)
 
         # TODO (Signal): Trigger 'Review Submitted' Notification?
