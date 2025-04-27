@@ -1,7 +1,7 @@
 # apps/transactions/views.py
 
 # Django imports
-from django.db.models import Q
+from django.db.models import Q, Avg  # Import Avg
 from django.utils import timezone
 
 # Django REST Framework imports
@@ -485,7 +485,7 @@ class ReviewViewSet(
 
         # Base queryset: Reviews linked to completed requests involving the user
         completed_requests_qs = BorrowingRequest.objects.filter(
-            status=BorrowingRequest.StatusChoices.COMPLETED
+            status=BorrowingRequest.StatusChoices.COMPLETED, id=self.kwargs["request_pk"]
         ).filter(Q(borrower_profile=user_profile) | Q(lender_profile=user_profile))
         # Return reviews linked to those completed requests
         return Review.objects.filter(
@@ -500,8 +500,8 @@ class ReviewViewSet(
         """
         Custom logic run during update (called by UpdateModelMixin's update/partial_update).
         Ensures only the correct user updates their respective fields and sets submission timestamp.
+        Recalculates and updates the average rating for the involved user profiles.
         """
-        # Debugging breakpoint
         instance = serializer.instance  # The Review object being updated/saved
         user_profile = getattr(self.request.user, "profile", None)
         borrowing_request = instance.borrowing_request
@@ -594,8 +594,6 @@ class ReviewViewSet(
             raise PermissionDenied("You are not a participant in this transaction.")
 
         # 3. Perform the save using the serializer
-        # serializer.save() handles updating only the validated fields provided in the PATCH request.
-        # We pass the timestamp to be set via kwargs.
         try:
             serializer.save(**save_kwargs)
         except Exception as e:
@@ -605,20 +603,41 @@ class ReviewViewSet(
             )  # Use logging
             raise  # Re-raise the original exception
 
-        # 4. Update UserProfile ratings after successful save
+        # 4. Update UserProfile average ratings after successful save
         instance.refresh_from_db()  # Ensure we have the latest data
         borrowing_request = instance.borrowing_request
 
-        # If borrower submitted review, update lender's rating
-        if "borrower_review_submitted_at" in save_kwargs and instance.rating_for_lender is not None:
+        # If borrower submitted review, update lender's average rating
+        if "borrower_review_submitted_at" in save_kwargs:
             lender_profile = borrowing_request.lender_profile
             if lender_profile:
-                lender_profile.update_rating(instance.rating_for_lender)
+                # Calculate average rating FOR the lender based on all relevant completed reviews
+                lender_avg_rating_data = Review.objects.filter(
+                    borrowing_request__lender_profile=lender_profile,
+                    borrowing_request__status=BorrowingRequest.StatusChoices.COMPLETED,
+                    rating_for_lender__isnull=False,  # Only consider reviews where borrower rated lender
+                ).aggregate(average_rating=Avg("rating_for_lender"))
 
-        # If lender submitted review, update borrower's rating
-        if "lender_review_submitted_at" in save_kwargs and instance.rating_for_borrower is not None:
+                lender_avg_rating = lender_avg_rating_data.get("average_rating")
+                # Assuming update_rating takes the calculated average.
+                # If lender_avg_rating is None (no ratings yet), the behavior depends
+                # on the implementation of update_rating (e.g., it might handle None or expect 0).
+                # Pass the calculated average (or None if no ratings exist).
+                lender_profile.update_rating(lender_avg_rating)
+
+        # If lender submitted review, update borrower's average rating
+        if "lender_review_submitted_at" in save_kwargs:
             borrower_profile = borrowing_request.borrower_profile
             if borrower_profile:
-                borrower_profile.update_rating(instance.rating_for_borrower)
+                # Calculate average rating FOR the borrower based on all relevant completed reviews
+                borrower_avg_rating_data = Review.objects.filter(
+                    borrowing_request__borrower_profile=borrower_profile,
+                    borrowing_request__status=BorrowingRequest.StatusChoices.COMPLETED,
+                    rating_for_borrower__isnull=False,  # Only consider reviews where lender rated borrower
+                ).aggregate(average_rating=Avg("rating_for_borrower"))
+
+                borrower_avg_rating = borrower_avg_rating_data.get("average_rating")
+                # Pass the calculated average (or None if no ratings exist).
+                borrower_profile.update_rating(borrower_avg_rating)
 
         # TODO (Signal): Trigger 'Review Submitted' Notification?
