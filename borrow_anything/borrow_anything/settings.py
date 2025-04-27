@@ -32,7 +32,6 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",  # Also include 127.0.0.1 variant
     "http://192.168.1.41:3000",
     "https://shardit.vercel.app",
-    "*",  # Allow all origins (not recommended for production)
     # Vite network address (replace if your IP changes)
     # Add any other origins you need (e.g., your deployed frontend URL later)
 ]
@@ -151,17 +150,14 @@ WSGI_APPLICATION = 'borrow_anything.wsgi.application'
 # Database settings for PostgreSQL
 isProd = config("IS_PROD", default=False, cast=bool)  # Check if in production
 Postgres = urlparse(config("PROD_DB_URL", default=""))  # Get the database URL
+
 if isProd:
     DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": Postgres.path.replace("/", ""),
-            "USER": Postgres.username,
-            "PASSWORD": Postgres.password,
-            "HOST": Postgres.hostname,
-            "PORT": 5432,
-        }
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
+}
 else:
     DATABASES = {
         "default": {
